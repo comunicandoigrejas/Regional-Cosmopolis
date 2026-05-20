@@ -153,7 +153,8 @@ else:
         with st.form("form_lancamentos", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
-                data_lancamento = st.date_input("Data do Lançamento")
+                # Modificado para exibir DD/MM/AAAA
+                data_lancamento = st.date_input("Data do Lançamento", format="DD/MM/YYYY")
                 tipo = st.selectbox("Tipo", ["Entrada (Dízimos, Ofertas)", "Saída (Despesas, Pagamentos)"])
             with col2:
                 cidade = st.selectbox("Igreja/Cidade", cidades_lista)
@@ -170,7 +171,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade,
+                        "cidade": city, # mantendo a consistência interna do envio
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -189,25 +190,22 @@ else:
     elif menu == "Relatórios":
         st.title("📊 Relatórios e Exportação")
         
-        # Filtros de Data
+        # Filtros de Data modificados para exibir DD/MM/AAAA
         col1, col2 = st.columns(2)
         with col1:
-            data_inicio = st.date_input("Data Inicial")
+            data_inicio = st.date_input("Data Inicial", format="DD/MM/YYYY")
         with col2:
-            data_fim = st.date_input("Data Final")
+            data_fim = st.date_input("Data Final", format="DD/MM/YYYY")
             
         if st.button("Buscar Lançamentos"):
             with st.spinner("Buscando as bençãos e despesas na planilha..."):
                 dados = buscar_lancamentos()
                 
                 if len(dados) > 1:
-                    # Converte os dados do Google Sheets para uma tabela Pandas
                     colunas = dados[0]
                     valores = dados[1:]
                     df = pd.DataFrame(valores, columns=colunas)
                     
-                    # Convertendo colunas para facilitar o filtro
-                    # Assumindo que a coluna Data_Lancamento é a de índice 1 e Valor é índice 5
                     nome_col_data = colunas[1]
                     nome_col_valor = colunas[5]
                     nome_col_tipo = colunas[3]
@@ -215,20 +213,15 @@ else:
                     df[nome_col_data] = pd.to_datetime(df[nome_col_data], format='%d/%m/%Y', errors='coerce')
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
                     
-                    # -------------------------------------------------------------
-                    # CORREÇÃO APLICADA AQUI: Filtro comparando diretamente com Pandas
-                    # -------------------------------------------------------------
                     data_inicio_pd = pd.to_datetime(data_inicio)
                     data_fim_pd = pd.to_datetime(data_fim)
                     mask = (df[nome_col_data] >= data_inicio_pd) & (df[nome_col_data] <= data_fim_pd)
-                    # -------------------------------------------------------------
                     
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
                         st.warning("Nenhum lançamento encontrado nesse período, irmão.")
                     else:
-                        # Exibir totais
                         entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
                         saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
                         saldo = entradas - saidas
@@ -242,24 +235,19 @@ else:
                         else:
                             c3.warning(f"Saldo: R$ {saldo:.2f}")
                         
-                        # Mostrando a tabela na tela
                         df_exibicao = df_filtrado.copy()
                         df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
                         st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
                         
-                        # ==========================================
                         # GERAÇÃO DO PDF
-                        # ==========================================
                         pdf = GeradorPDF()
                         pdf.add_page()
                         
-                        # Resumo no PDF
                         pdf.set_font("helvetica", "B", 12)
                         pdf.cell(0, 10, f"Período: {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", ln=True)
                         pdf.cell(0, 10, f"Entradas: R$ {entradas:.2f} | Saídas: R$ {saidas:.2f} | Saldo: R$ {saldo:.2f}", ln=True)
                         pdf.ln(5)
                         
-                        # Cabeçalho da Tabela no PDF
                         pdf.set_fill_color(200, 220, 255)
                         pdf.set_font("helvetica", "B", 10)
                         pdf.cell(25, 10, "Data", border=1, fill=True)
@@ -268,17 +256,14 @@ else:
                         pdf.cell(25, 10, "Tipo", border=1, fill=True)
                         pdf.cell(25, 10, "Valor", border=1, fill=True, ln=True)
                         
-                        # Linhas da tabela no PDF
                         pdf.set_font("helvetica", "", 9)
                         for index, row in df_exibicao.iterrows():
                             pdf.cell(25, 8, str(row[colunas[1]]), border=1)
-                            # Pega até 15 caracteres da cidade e 40 da descrição para não quebrar a tabela
                             pdf.cell(35, 8, str(row[colunas[2]])[:15], border=1) 
                             pdf.cell(80, 8, str(row[colunas[4]])[:40], border=1)
                             pdf.cell(25, 8, str(row[colunas[3]]), border=1)
                             pdf.cell(25, 8, f"R$ {row[colunas[5]]:.2f}", border=1, ln=True)
                         
-                        # Gerar o arquivo para download
                         pdf_bytes = bytes(pdf.output())
                         
                         st.download_button(
