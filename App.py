@@ -56,7 +56,7 @@ def verificar_login(usuario, senha):
                         if str(usuario) == str(linha[2]) and str(senha) == str(linha[3]):
                             return True
     except Exception as e:
-        st.error(f"Erro ao conectar: {e}")
+        st.error(f"Erro ao conectar no login: {e}")
     return False
 
 @st.cache_data(ttl=300)
@@ -78,30 +78,30 @@ def buscar_lancamentos():
             dados = resposta.json()
             if dados["status"] == "sucesso":
                 return dados["dados"]
-    except:
-        pass
+            else:
+                st.error(f"Aviso do Google Sheets: {dados.get('mensagem', 'Sem mensagem de erro detalhada')}")
+        else:
+            st.error(f"Erro de resposta do servidor da planilha: Código {resposta.status_code}")
+    except Exception as e:
+        st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
 # 5. GERADOR DE PDF ABENÇOADO
 class GeradorPDF(FPDF):
     def header(self):
-        # Para colocar o logo da igreja, basta colocar a imagem na mesma pasta e descomentar a linha abaixo:
-        # self.image('logo_igreja.png', 10, 8, 30)
         self.set_font('helvetica', 'B', 16)
-        self.set_text_color(43, 27, 84) # Cor roxa escuro
+        self.set_text_color(43, 27, 84) 
         self.cell(0, 10, 'Relatório Financeiro - Regional Cosmópolis', align='C')
         self.ln(20)
 
     def footer(self):
         self.set_y(-40)
-        # Linha para a assinatura da pastora
         self.set_draw_color(0, 0, 0)
         self.line(60, self.get_y(), 150, self.get_y()) 
         self.ln(2)
         self.set_font('helvetica', 'B', 10)
         self.cell(0, 10, 'Assinatura da Pastora', align='C')
         self.ln(10)
-        # Data de exportação
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
         data_atual = datetime.now().strftime("%d/%m/%Y às %H:%M")
@@ -134,7 +134,6 @@ if not st.session_state['logado']:
 # TELA 2: DENTRO DO SISTEMA
 # ==========================================
 else:
-    # Menu Lateral
     st.sidebar.title("🕊️ Menu Principal")
     st.sidebar.write("Bem-vinda, Pastora!")
     menu = st.sidebar.radio("Navegação", ["Lançamentos", "Relatórios"])
@@ -153,7 +152,6 @@ else:
         with st.form("form_lancamentos", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
-                # Modificado para exibir DD/MM/AAAA
                 data_lancamento = st.date_input("Data do Lançamento", format="DD/MM/YYYY")
                 tipo = st.selectbox("Tipo", ["Entrada (Dízimos, Ofertas)", "Saída (Despesas, Pagamentos)"])
             with col2:
@@ -171,7 +169,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": city, # mantendo a consistência interna do envio
+                        "cidade": cidade, # Corrigido de 'city' para 'cidade'
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -182,15 +180,14 @@ else:
                         if resposta_post.status_code == 200:
                             st.success("Aleluia! Lançamento registrado com sucesso!")
                         else:
-                            st.error("Erro ao gravar na planilha.")
+                            st.error(f"Erro ao gravar na planilha. Código: {resposta_post.status_code}")
                     except Exception as e:
-                        st.error(f"Erro de conexão: {e}")
+                        st.error(f"Erro de conexão no envio: {e}")
 
     # --- ABA DE RELATÓRIOS ---
     elif menu == "Relatórios":
         st.title("📊 Relatórios e Exportação")
         
-        # Filtros de Data modificados para exibir DD/MM/AAAA
         col1, col2 = st.columns(2)
         with col1:
             data_inicio = st.date_input("Data Inicial", format="DD/MM/YYYY")
@@ -210,8 +207,12 @@ else:
                     nome_col_valor = colunas[5]
                     nome_col_tipo = colunas[3]
                     
-                    df[nome_col_data] = pd.to_datetime(df[nome_col_data], format='%d/%m/%Y', errors='coerce')
+                    # Tratamento adaptativo de data para evitar que vire NaT incorretamente
+                    df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True)
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
+                    
+                    if df[nome_col_data].isna().all():
+                        st.error("Aviso: As datas vindas da planilha não puderam ser lidas no formato correto. Verifique a coluna de datas na sua tabela do Google Sheets!")
                     
                     data_inicio_pd = pd.to_datetime(data_inicio)
                     data_fim_pd = pd.to_datetime(data_fim)
@@ -220,7 +221,12 @@ else:
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
-                        st.warning("Nenhum lançamento encontrado nesse período, irmão.")
+                        st.warning("Nenhum lançamento encontrado neste período selecionado, irmão Willian. Tente estender as datas inicial e final para testar.")
+                        
+                        # Bloco de ajuda para depuração visual temporária
+                        with st.expander("Ver dados brutos recebidos da planilha"):
+                            st.write("Colunas detectadas:", colunas)
+                            st.dataframe(df.head(10))
                     else:
                         entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
                         saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
@@ -273,4 +279,4 @@ else:
                             mime="application/pdf"
                         )
                 else:
-                    st.info("A planilha ainda não possui lançamentos registrados.")
+                    st.info("A planilha retornou vazia ou o script do Google não entregou linhas válidas.")
