@@ -215,8 +215,14 @@ else:
                     df[nome_col_data] = pd.to_datetime(df[nome_col_data], format='%d/%m/%Y', errors='coerce')
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
                     
-                    # Filtrando pelas datas escolhidas
-                    mask = (df[nome_col_data].dt.date >= data_inicio) & (df[nome_col_data].dt.date <= data_fim)
+                    # -------------------------------------------------------------
+                    # CORREÇÃO APLICADA AQUI: Filtro comparando diretamente com Pandas
+                    # -------------------------------------------------------------
+                    data_inicio_pd = pd.to_datetime(data_inicio)
+                    data_fim_pd = pd.to_datetime(data_fim)
+                    mask = (df[nome_col_data] >= data_inicio_pd) & (df[nome_col_data] <= data_fim_pd)
+                    # -------------------------------------------------------------
+                    
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
