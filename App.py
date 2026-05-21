@@ -10,65 +10,59 @@ import math
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
 
-# 2. ESTILOS VISUAIS CUSTOMIZADOS (Fontes escuras, Azul Marinho e Laranja no Hover)
+# 2. ESTILOS VISUAIS PROTEGIDOS CONTRA TEMA ESCURO (Fontes visíveis em qualquer modo)
 st.markdown("""
     <style>
-    /* Oculta a barra superior padrão do Streamlit (Share, GitHub, etc.) */
-    header {
-        visibility: hidden !important;
-    }
-    footer {
-        visibility: hidden !important;
-    }
-    #MainMenu {
-        visibility: hidden !important;
-    }
+    /* Oculta a barra superior padrão do Streamlit */
+    header { visibility: hidden !important; }
+    footer { visibility: hidden !important; }
+    #MainMenu { visibility: hidden !important; }
     
     /* Títulos Principais das Páginas */
     h1, h2, h3 {
-        color: #000080; /* Azul Marinho */
-        font-weight: bold;
+        color: #000080 !important; /* Azul Marinho Forçado */
+        font-weight: bold !important;
     }
 
     /* Estilização dos Botões de Menu (Transformando em Cards Grandes) */
     div.stButton > button {
         border-radius: 12px !important;
         padding: 30px 20px !important;
-        background-color: #f0f2f6 !important; /* Fundo cinza claro */
-        border: 2px solid #2b1b54 !important; /* Borda fina Roxo/Azul */
-        transition: all 0.3s ease;
+        background-color: #f0f2f6 !important; /* Fundo cinza claro estável */
+        border: 2px solid #2b1b54 !important; /* Borda fina */
+        transition: all 0.3s ease !important;
         height: auto !important;
-        min-height: 160px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
+        min-height: 160px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     
     /* Efeito ao passar o mouse por cima do Card (Muda para Laranja) */
     div.stButton > button:hover {
         background-color: #ff8c00 !important; 
         border-color: #ff8c00 !important;
-        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.15);
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2) !important;
     }
     
-    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Fonte Bem Escura) */
+    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Preto Absoluto para não sumir no Dark Mode) */
     div.stButton > button p {
-        color: #1e1e1e !important; 
+        color: #000000 !important; 
         font-size: 16px !important;
-        text-align: center;
-        white-space: pre-line; /* Permite a quebra de linha correta do texto */
+        text-align: center !important;
+        white-space: pre-line !important;
     }
     
-    /* Garante que o título dentro do Card fique maior e em Azul Marinho */
+    /* Título interno em negrito dentro do Card */
     div.stButton > button p strong {
-        color: #000080 !important; 
-        font-size: 22px !important;
-        display: block;
-        margin-bottom: 8px;
+        color: #000080 !important; /* Azul Marinho */
+        font-size: 21px !important;
+        display: block !important;
+        margin-bottom: 6px !important;
     }
     
-    /* Inverte as cores do texto para Branco quando o mouse passa por cima do Card (Hover) */
+    /* Inverte todas as fontes internas para Branco apenas no Hover */
     div.stButton > button:hover p, div.stButton > button:hover p strong {
         color: #ffffff !important;
     }
@@ -114,18 +108,20 @@ def verificar_login(usuario, senha):
         st.error(f"Erro ao conectar no login: {e}")
     return False
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60) # Diminuído o tempo de cache para atualizar mais rápido se você mudar na planilha
 def buscar_cidades():
     try:
         resposta = requests.get(APPS_SCRIPT_URL, params={"action": "getCidades"})
         if resposta.status_code == 200:
             dados = resposta.json()
             if dados["status"] == "sucesso":
-                # LINHA CORRIGIDA AQUI, IRMÃO WILLIAN!
-                return [linha[0] for linha in dados["dados"][1:] if linha[0] != ""]
+                # Filtra linhas vazias ou cabeçalhos indesejados se houver
+                lista = [str(linha[0]).strip() for linha in dados["dados"][1:] if len(linha) > 0 and str(linha[0]).strip() != ""]
+                if lista:
+                    return lista
     except Exception as e:
-        pass
-    return ["Cosmópolis", "Erro de Conexão"]
+        st.error(f"Erro técnico ao buscar cidades: {e}")
+    return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"] # Fallback abençoado baseado no seu print
 
 def buscar_lancamentos():
     try:
@@ -142,14 +138,13 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF ABENÇOADO COM GRID COMPLETO
+# 5. GERADOR DE PDF
 class GeradorPDF(FPDF):
     def header(self):
         caminho_logo = os.path.join("assets", "logo.png")
         if os.path.exists(caminho_logo):
             self.image(caminho_logo, x=10, y=8, w=30)
             self.set_x(45)
-        
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(43, 27, 84) 
         self.cell(0, 10, 'Relatório Financeiro - Regional Cosmópolis', align='C', ln=True)
@@ -165,14 +160,10 @@ class GeradorPDF(FPDF):
         self.cell(0, 5, 'Assinatura do Responsável', align='C')
 
 # 6. GERENCIAMENTO DE ESTADO DA SESSÃO
-if 'logado' not in st.session_state:
-    st.session_state['logado'] = False
-if 'usuario_atual' not in st.session_state:
-    st.session_state['usuario_atual'] = ""
-if 'senha_atual' not in st.session_state:
-    st.session_state['senha_atual'] = ""
-if 'tela_atual' not in st.session_state:
-    st.session_state['tela_atual'] = "menu"
+if 'logado' not in st.session_state: st.session_state['logado'] = False
+if 'usuario_atual' not in st.session_state: st.session_state['usuario_atual'] = ""
+if 'senha_atual' not in st.session_state: st.session_state['senha_atual'] = ""
+if 'tela_atual' not in st.session_state: st.session_state['tela_atual'] = "menu"
 
 # ==========================================
 # TELA 1: LOGIN DO SISTEMA
@@ -203,8 +194,8 @@ if not st.session_state['logado']:
 else:
     # --- JANELA: MENU PRINCIPAL DE BOTÕES CARD ---
     if st.session_state['tela_atual'] == "menu":
-        st.title("🏛️ Painel de Controle - Regional Cosmópolis")
-        st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
+        st.title("🏛️ Painel de Controle")
+        st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**!")
         st.write("")
         
         col_card1, col_card2, col_card3 = st.columns(3)
@@ -227,7 +218,6 @@ else:
                 st.session_state['tela_atual'] = "alterar_senha"
                 st.rerun()
         
-        st.write("")
         st.write("")
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
@@ -267,7 +257,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": city,
+                        "cidade": cidade, # CORRIGIDO AQUI (Estava city)
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -299,7 +289,7 @@ else:
             data_fim = st.date_input("Data Final", format="DD/MM/YYYY")
             
         if st.button("Buscar Dados da Planilha", use_container_width=True):
-            with st.spinner("Buscando as bênçãos e despesas na planilha..."):
+            with st.spinner("Buscando dados na planilha..."):
                 dados = buscar_lancamentos()
                 
                 if len(dados) > 1:
@@ -321,7 +311,7 @@ else:
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
-                        st.warning("Nenhum lançamento encontrado neste período selecionado, irmão Willian.")
+                        st.warning("Nenhum lançamento encontrado neste período selecionado.")
                     else:
                         entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
                         saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
@@ -337,16 +327,14 @@ else:
                         df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
                         st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
                         
-                        # GERAÇÃO DO PDF PROFISSIONAL COM GRID COMPLETO
+                        # PDF GENERATOR
                         pdf = GeradorPDF()
                         pdf.add_page()
-                        
                         pdf.set_font("helvetica", "B", 11)
                         pdf.cell(0, 10, f"Período: {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", ln=True)
                         pdf.ln(5)
                         
                         larguras = [23, 32, 85, 25, 25] 
-                        
                         pdf.set_fill_color(200, 220, 255)
                         pdf.cell(larguras[0], 10, "Data", border=1, fill=True)
                         pdf.cell(larguras[1], 10, "Cidade", border=1, fill=True)
@@ -361,8 +349,7 @@ else:
                             texto_desc = str(row[colunas[4]])
                             largura_real_texto = pdf.get_string_width(texto_desc)
                             num_linhas = math.ceil(largura_real_texto / (larguras[2] - 3))
-                            if num_linhas < 1:
-                                num_linhas = 1
+                            if num_linhas < 1: num_linhas = 1
                             
                             altura_da_linha_final = num_linhas * altura_base_texto
                             y_topo = pdf.get_y()
@@ -376,7 +363,6 @@ else:
                             
                             pdf.cell(larguras[3], altura_da_linha_final, str(row[colunas[3]]), border=1)
                             pdf.cell(larguras[4], altura_da_linha_final, f"R$ {row[colunas[5]]:.2f}", border=1)
-                            
                             pdf.set_xy(10, y_topo + altura_da_linha_final)
                         
                         pdf_bytes = bytes(pdf.output())
@@ -389,13 +375,13 @@ else:
                             use_container_width=True
                         )
                 else:
-                    st.info("A planilha retornou vazia ou sem linhas válidas para o período.")
+                    st.info("A planilha retornou vazia para o período selecionado.")
 
-# --- JANELA: ALTERAÇÃO DE SENHA ---
+    # --- JANELA: ALTERAÇÃO DE SENHA ---
     elif st.session_state['tela_atual'] == "alterar_senha":
         col_nav1, col_nav2 = st.columns([6, 2])
         with col_nav1:
-            st.title("🔑 Alterar Credenciais de Acesso")
+            st.title("🔑 Alterar Credenciais")
         with col_nav2:
             if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
                 st.session_state['tela_atual'] = "menu"
