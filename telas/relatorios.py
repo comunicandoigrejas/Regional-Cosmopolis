@@ -48,6 +48,56 @@ class GeradorPDF(FPDF):
         self.cell(0, 10, f'Página {self.page_no()}', align='C')
 
 
+# FUNÇÃO ACIONADA AUTOMATICAMENTE ASSIM QUE DETECTA MUDANÇA NA TABELA
+def processar_mudanca_direta(APPS_SCRIPT_URL, df_mes_atual, colunas):
+    mudancas = st.session_state["tabela_financeira_direta"].get("edited_rows", {})
+    
+    if mudancas:
+        nome_col_id = colunas[0]
+        nome_col_data = colunas[1]
+        nome_col_cidade = colunas[2]
+        nome_col_tipo = colunas[3]
+        nome_col_desc = colunas[4]
+        nome_col_valor = colunas[5]
+        
+        for indice_linha_str, novos_campos in mudancas.items():
+            indice_linha = int(indice_linha_str)
+            linha_original = df_mes_atual.iloc[indice_linha]
+            id_alvo = str(linha_original[nome_col_id])
+            
+            # Recupera o que foi alterado ou mantém o dado original da linha
+            data_final = novos_campos.get(nome_col_data, linha_original[nome_col_data].strftime("%d/%m/%Y"))
+            cidade_final = novos_campos.get(nome_col_cidade, str(linha_original[nome_col_cidade]))
+            tipo_final = novos_campos.get(nome_col_tipo, str(linha_original[nome_col_tipo]))
+            desc_final = novos_campos.get(nome_col_desc, str(linha_original[nome_col_desc]))
+            
+            # Garante que o valor vai como string limpa para o Google Script salvar
+            valor_cru = novos_campos.get(nome_col_valor, float(linha_original[nome_col_valor]))
+            valor_final = str(valor_cru)
+            
+            dados_update = {
+                "action": "editarLancamento",
+                "id_lancamento": id_alvo,
+                "data_lancamento": data_final,
+                "cidade": cidade_final,
+                "tipo": tipo_final,
+                "descricao": desc_final,
+                "valor": valor_final,
+                "usuario": st.session_state.get('usuario_atual', 'Sistema')
+            }
+            
+            try:
+                # Dispara a requisição em background direto para o Google Sheets
+                resposta = requests.post(APPS_SCRIPT_URL, json=dados_update)
+                if resposta.status_code == 200:
+                    st.toast("✔️ Planilha atualizada com sucesso!", icon="💾")
+            except:
+                st.toast("❌ Falha ao sincronizar com o Google Sheets.", icon="⚠️")
+                
+        # Limpa o cache para que o app puxe os novos dados na próxima leitura
+        st.cache_data.clear()
+
+
 def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidades):
     col_nav1, col_nav2 = st.columns([6, 2])
     with col_nav1:
@@ -74,17 +124,14 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
         nome_col_desc = colunas[4]
         nome_col_valor = colunas[5]
         
-        # Tratamento inicial dos dados vindos da planilha
         df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
         df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
         
-        # Filtrar o mês atual para exibição e edição
         df_mes_atual = df[(df[nome_col_data].dt.month == mes_atual_num) & (df[nome_col_data].dt.year == ano_atual_num)].copy()
         
         if df_mes_atual.empty:
             st.info("Nenhum registro encontrado para este mês atual na planilha, irmão Willian.")
         else:
-            # Cards de resumo lá em cima
             entradas = df_mes_atual[df_mes_atual[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
             saidas = df_mes_atual[df_mes_atual[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
             saldo = entradas - saidas
@@ -95,22 +142,19 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             c3.info(f"Saldo do Mês: R$ {saldo:.2f}")
             
             st.write("")
-            st.markdown("💡 **Instruções abençoadas:** Clique duas vezes em qualquer célula da tabela abaixo para alterar os valores diretamente. Para deletar, use o painel logo abaixo da tabela.")
+            st.info("💡 **Instrução:** Dê duplo clique em qualquer campo da tabela abaixo, altere o valor e pressione **Enter** ou clique fora. A planilha será atualizada automaticamente em tempo real! 🟢")
 
-            # FORMATAR DATA PARA FORMATO BRASILEIRO NA PLANILHA INTERATIVA
             df_editor = df_mes_atual.copy()
             df_editor[nome_col_data] = df_editor[nome_col_data].dt.strftime('%d/%m/%Y')
             
-            # -----------------------------------------------------------------
-            # 💻 A MÁGICA ACONTECE AQUI: TABELA DIRETAMENTE EDITÁVEL!
-            # -----------------------------------------------------------------
             lista_cidades = buscar_cidades()
             
-            dados_editados = st.data_editor(
+            # EXIBIÇÃO DA TABELA CONECTADA DIRETAMENTE AO EVENTO DE MUDANÇA
+            st.data_editor(
                 df_editor[[nome_col_id, nome_col_data, nome_col_cidade, nome_col_tipo, nome_col_desc, nome_col_valor]],
                 use_container_width=True,
                 hide_index=True,
-                disabled=[nome_col_id], # Bloqueia o ID para ninguém alterar sem querer
+                disabled=[nome_col_id],
                 column_config={
                     nome_col_id: st.column_config.TextColumn("ID", width="small"),
                     nome_col_data: st.column_config.TextColumn("Data (DD/MM/AAAA)"),
@@ -119,59 +163,14 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                     nome_col_desc: st.column_config.TextColumn("Descrição / Histórico"),
                     nome_col_valor: st.column_config.NumberColumn("Valor (R$)", format="%.2f"),
                 },
-                key="tabela_financeira_direta"
+                key="tabela_financeira_direta",
+                on_change=processar_mudanca_direta,
+                args=(APPS_SCRIPT_URL, df_mes_atual, colunas)
             )
-            
-            # Captura se o usuário alterou alguma linha da tabela acima
-            mudancas = st.session_state["tabela_financeira_direta"].get("edited_rows", {})
-            
-            if mudancas:
-                st.warning("⚠️ Você fez alterações diretamente nos campos da tabela acima!")
-                if st.button("💾 Gravar Alterações Diretas na Planilha", use_container_width=True, type="primary"):
-                    sucesso_geral = True
-                    
-                    # Processa cada linha alterada na tabela dinâmica
-                    for indice_linha_str, novos_campos in mudancas.items():
-                        indice_linha = int(indice_linha_str)
-                        linha_original = df_mes_atual.iloc[indice_linha]
-                        id_alvo = str(linha_original[nome_col_id])
-                        
-                        # Monta os dados mesclando o original com o que foi digitado de novo
-                        data_final = novos_campos.get(nome_col_data, linha_original[nome_col_data].strftime("%d/%m/%Y"))
-                        cidade_final = novos_campos.get(nome_col_cidade, str(linha_original[nome_col_cidade]))
-                        tipo_final = novos_campos.get(nome_col_tipo, str(linha_original[nome_col_tipo]))
-                        desc_final = novos_campos.get(nome_col_desc, str(linha_original[nome_col_desc]))
-                        valor_final = str(novos_campos.get(nome_col_valor, float(linha_original[nome_col_valor])))
-                        
-                        dados_update = {
-                            "action": "editarLancamento",
-                            "id_lancamento": id_alvo,
-                            "data_lancamento": data_final,
-                            "cidade": cidade_final,
-                            "tipo": tipo_final,
-                            "descricao": desc_final,
-                            "valor": valor_final,
-                            "usuario": st.session_state['usuario_atual']
-                        }
-                        
-                        try:
-                            res = requests.post(APPS_SCRIPT_URL, json=dados_update)
-                            if res.status_code != 200:
-                                sucesso_geral = False
-                        except:
-                            sucesso_geral = False
-                    
-                    if sucesso_geral:
-                        st.success("Glória a Deus! Todas as linhas alteradas foram atualizadas na planilha!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.error("Ocorreu uma falha ao tentar atualizar algumas linhas. Verifique a conexão.")
 
             st.write("")
             st.markdown("---")
             
-            # Botões de utilidade adicionais (Exportar PDF e Exclusão Segura)
             col_b1, col_b2 = st.columns([1, 1])
             
             with col_b1:
@@ -224,7 +223,7 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                 )
             
             with col_b2:
-                # SISTEMA DE EXCLUSÃO SIMPLIFICADO POR ID
+                # SISTEMA DE EXCLUSÃO SIMPLIFICADO POR ID INALTERADO
                 with st.popover("❌ Deletar um Lançamento", use_container_width=True):
                     id_deletar = st.selectbox("Escolha o ID para remover definitivamente:", df_mes_atual[nome_col_id].tolist(), key="id_deletar_pop")
                     st.write("A operação é final e tirará a linha do Google Sheets.")
