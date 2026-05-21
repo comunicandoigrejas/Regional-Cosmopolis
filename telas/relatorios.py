@@ -178,15 +178,15 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                                 "cidade": nova_cidade,
                                 "tipo": novo_tipo,
                                 "descricao": nova_desc,
-                                "valor": novo_valor,
+                                "valor": str(novo_valor),  # CORRIGIDO: Convertido em String para o Apps Script processar com sucesso
                                 "usuario": st.session_state['usuario_atual']
                             }
                             try:
-                                with st.spinner("A atualizar dados na planilha..."):
+                                with st.spinner("A enviar correções para a planilha..."):
                                     res_up = requests.post(APPS_SCRIPT_URL, json=dados_update)
                                     if res_up.status_code == 200:
                                         st.success("Glória a Deus! Lançamento corrigido com sucesso! Atualizando...")
-                                        # LIMPA O CACHE PARA FORÇAR A BUSCA DE DADOS NOVOS
+                                        # Limpa o cache para garantir que puxe a informação nova da planilha
                                         st.cache_data.clear()
                                         st.rerun()
                                     else:
@@ -208,7 +208,7 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                             res_del = requests.post(APPS_SCRIPT_URL, json=dados_delete)
                             if res_del.status_code == 200:
                                 st.success("Registro removido com sucesso! Sincronizando dados...")
-                                # LIMPA O CACHE PARA FORÇAR A BUSCA DE DADOS NOVOS
+                                # Limpa o cache para garantir a sincronização imediata
                                 st.cache_data.clear()
                                 st.rerun()
                             else:
