@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
 
-# IMPORTAÇÃO DAS TELAS MODULARES DA PASTA JANELAS
-from janelas.lancamentos import renderizar_tela_lancamentos
-from janelas.relatorios import renderizar_tela_relatorios
-from janelas.alterar_senha import renderizar_tela_senha
+# IMPORTAÇÃO DAS TELAS MODULARES DIRETAMENTE DA PASTA PAGES
+from pages.lancamentos import renderizar_tela_lancamentos
+from pages.relatorios import renderizar_tela_relatorios
+from pages.alterar_senha import renderizar_tela_senha
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
@@ -177,7 +177,7 @@ else:
             st.session_state['tela_atual'] = "menu"
             st.rerun()
 
-    # DIRECIONAMENTO PARA AS JANELAS SEPARADAS
+    # DIRECIONAMENTO PARA AS TELAS SEPARADAS (DENTRO DE PAGES)
     elif st.session_state['tela_atual'] == "lancamentos":
         renderizar_tela_lancamentos(APPS_SCRIPT_URL, buscar_cidades)
         
