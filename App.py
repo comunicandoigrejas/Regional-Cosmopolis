@@ -92,7 +92,7 @@ class GeradorPDF(FPDF):
     def header(self):
         # Verifica se existe o arquivo logo.png na pasta para não dar erro
         if os.path.exists("logo.png"):
-            self.image("logo.png", x=10, y=8, w=33)
+            self.image("logo.png", x=10, y=8, w=30)
             self.set_x(45) # Desloca o texto para o lado do logo
         
         self.set_font('helvetica', 'B', 16)
@@ -181,7 +181,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": city,
+                        "cidade": cidade,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -259,18 +259,38 @@ else:
                         pdf.set_font("helvetica", "B", 10)
                         pdf.cell(23, 10, "Data", border=1, fill=True)
                         pdf.cell(32, 10, "Cidade", border=1, fill=True)
-                        pdf.cell(85, 10, "Descrição", border=1, fill=True) # Aumentado espaço da descrição
+                        pdf.cell(85, 10, "Descrição", border=1, fill=True)
                         pdf.cell(25, 10, "Tipo", border=1, fill=True)
                         pdf.cell(25, 10, "Valor", border=1, fill=True, ln=True)
                         
                         pdf.set_font("helvetica", "", 9)
                         for index, row in df_exibicao.iterrows():
+                            # Guardamos a posição Y atual antes de começar a linha para podermos alinhar as colunas seguintes
+                            posicao_y_inicial = pdf.get_y()
+                            
+                            # Colunas normais (Data e Cidade)
                             pdf.cell(23, 8, str(row[colunas[1]]), border=1)
-                            pdf.cell(32, 8, str(row[colunas[2]])[:15], border=1) 
-                            # Agora exibe a descrição completa sem o corte [:40] anterior
-                            pdf.cell(85, 8, str(row[colunas[4]]), border=1) 
-                            pdf.cell(25, 8, str(row[colunas[3]]), border=1)
-                            pdf.cell(25, 8, f"R$ {row[colunas[5]]:.2f}", border=1, ln=True)
+                            pdf.cell(32, 8, str(row[colunas[2]])[:15], border=1)
+                            
+                            # Guardamos a posição X atual para desenhar a descrição exatamente aqui
+                            posicao_x_descricao = pdf.get_x()
+                            
+                            # Imprime a Descrição usando multi_cell para fazer a quebra de linha automática (largura 85)
+                            pdf.multi_cell(85, 8, str(row[colunas[4]]), border=1)
+                            
+                            # Descobrimos até onde a descrição foi (Y final) para sabermos a altura real da linha
+                            posicao_y_final = pdf.get_y()
+                            altura_linha = posicao_y_final - posicao_y_inicial
+                            
+                            # Voltamos o cursor para o topo desta linha e pulamos o X da descrição para desenhar Tipo e Valor
+                            pdf.set_xy(posicao_x_descricao + 85, posicao_y_inicial)
+                            
+                            # Imprime Tipo e Valor alinhados com a altura corrigida
+                            pdf.cell(25, altura_linha, str(row[colunas[3]]), border=1)
+                            pdf.cell(25, altura_linha, f"R$ {row[colunas[5]]:.2f}", border=1)
+                            
+                            # Define o cursor definitivamente para a próxima linha da tabela
+                            pdf.set_xy(10, posicao_y_final)
                         
                         pdf_bytes = bytes(pdf.output())
                         
