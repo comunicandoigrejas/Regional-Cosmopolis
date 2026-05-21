@@ -24,13 +24,13 @@ st.markdown("""
         visibility: hidden !important;
     }
     
-    /* Customização dos Botões de Menu Principal */
+    /* Customização dos Quadros do Menu Principal */
     .menu-box {
         text-align: center;
         padding: 20px;
         border-radius: 10px;
         background-color: #f0f2f6;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
     }
     
     /* Botões de Ação do Sistema */
@@ -148,6 +148,7 @@ if 'tela_atual' not in st.session_state:
 if not st.session_state['logado']:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        st.write("")
         st.title("🕊️ Financeiro Regional")
         st.write("A paz do Senhor! Faça seu login.")
         
@@ -171,22 +172,29 @@ else:
     if st.session_state['tela_atual'] == "menu":
         st.title("🕊️ Painel de Controle - Regional Cosmópolis")
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
+        st.write("")
         
-        # Cria duas colunas largas para colocar os botões lado a lado no centro
+        # Cria duas colunas largas para colocar os blocos lado a lado no centro
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
+            # Quadro com Nome e Descrição da primeira opção
             st.markdown('<div class="menu-box"><h3>Registrar Movimentações</h3><p>Insira novas entradas e saídas de dízimos, ofertas ou despesas.</p></div>', unsafe_allow_html=True)
-            if st.button("📝 Acessar Registrar Lançamentos", use_container_width=True):
+            # O botão inserido exatamente em seguida, acoplado ao quadro maior
+            if st.button("📝 Acessar Registrar Lançamentos", use_container_width=True, key="btn_lancamentos"):
                 st.session_state['tela_atual'] = "lancamentos"
                 st.rerun()
                 
         with col_btn2:
+            # Quadro com Nome e Descrição da segunda opção
             st.markdown('<div class="menu-box"><h3>Relatórios Financeiros</h3><p>Consulte registros, analise saldos e exporte o fechamento em PDF.</p></div>', unsafe_allow_html=True)
-            if st.button("📊 Acessar Gerar Relatórios", use_container_width=True):
+            # O botão inserido exatamente em seguida, acoplado ao quadro maior
+            if st.button("📊 Acessar Gerar Relatórios", use_container_width=True, key="btn_relatorios"):
                 st.session_state['tela_atual'] = "relatorios"
                 st.rerun()
         
+        st.write("")
+        st.write("")
         # Botão de Sair posicionado de forma limpa na base do menu
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
@@ -223,7 +231,7 @@ else:
                 if descricao == "" or valor == 0:
                     st.warning("Varão, a descrição e o valor não podem ficar vazios!")
                 else:
-                    # LINHA 232 CORRIGIDA: Removido o 'city :=' que gerava o erro!
+                    # Correção da sintaxe realizada com sucesso!
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
@@ -341,7 +349,7 @@ else:
                             pdf.set_xy(10, y_topo + altura_da_linha_final)
                         
                         pdf_bytes = bytes(pdf.output())
-                        st.ln(2)
+                        st.write("")
                         st.download_button(
                             label="📥 Exportar Relatório Completo em PDF",
                             data=pdf_bytes,
