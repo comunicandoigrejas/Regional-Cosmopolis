@@ -1,12 +1,12 @@
 import streamlit as st
 import requests
 
-# IMPORTAÇÃO DAS TELAS MODULARES DIRETAMENTE DA PASTA PAGES
-from pages.lancamentos import renderizar_tela_lancamentos
-from pages.relatorios import renderizar_tela_relatorios
-from pages.alterar_senha import renderizar_tela_senha
+# IMPORTAÇÃO DAS TELAS MODULARES DIRETAMENTE DA NOVA PASTA RENOMEADA
+from janelas.lancamentos import renderizar_tela_lancamentos
+from janelas.relatorios import renderizar_tela_relatorios
+from janelas.alterar_senha import renderizar_tela_senha
 
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
 
 # 2. ESTILOS VISUAIS CUSTOMIZADOS PROTEGIDOS CONTRA DARK MODE
