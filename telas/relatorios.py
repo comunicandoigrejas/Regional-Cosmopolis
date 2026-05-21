@@ -54,7 +54,7 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
         meses_nome = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"}
         mes_atual_num = datetime.now().month
         ano_atual_num = datetime.now().year
-        st.title(f"📊 Lançamentos de {meses_nome[mes_atual_num]} de {ano_atual_num}")
+        st.title(f"📊 Painel Financeiro Direto — {meses_nome[mes_atual_num]}/{ano_atual_num}")
     with col_nav2:
         if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
             st.session_state['tela_atual'] = "menu"
@@ -74,14 +74,17 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
         nome_col_desc = colunas[4]
         nome_col_valor = colunas[5]
         
+        # Tratamento inicial dos dados vindos da planilha
         df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
         df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
         
+        # Filtrar o mês atual para exibição e edição
         df_mes_atual = df[(df[nome_col_data].dt.month == mes_atual_num) & (df[nome_col_data].dt.year == ano_atual_num)].copy()
         
         if df_mes_atual.empty:
             st.info("Nenhum registro encontrado para este mês atual na planilha, irmão Willian.")
         else:
+            # Cards de resumo lá em cima
             entradas = df_mes_atual[df_mes_atual[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
             saidas = df_mes_atual[df_mes_atual[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
             saldo = entradas - saidas
@@ -91,129 +94,154 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             c2.error(f"Saídas do Mês: R$ {saidas:.2f}")
             c3.info(f"Saldo do Mês: R$ {saldo:.2f}")
             
-            df_exibicao = df_mes_atual.copy()
-            df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
+            st.write("")
+            st.markdown("💡 **Instruções abençoadas:** Clique duas vezes em qualquer célula da tabela abaixo para alterar os valores diretamente. Para deletar, use o painel logo abaixo da tabela.")
+
+            # FORMATAR DATA PARA FORMATO BRASILEIRO NA PLANILHA INTERATIVA
+            df_editor = df_mes_atual.copy()
+            df_editor[nome_col_data] = df_editor[nome_col_data].dt.strftime('%d/%m/%Y')
             
-            st.dataframe(df_exibicao[[nome_col_id, colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True, hide_index=True)
+            # -----------------------------------------------------------------
+            # 💻 A MÁGICA ACONTECE AQUI: TABELA DIRETAMENTE EDITÁVEL!
+            # -----------------------------------------------------------------
+            lista_cidades = buscar_cidades()
             
-            # PDF GENERATOR
-            usuario_pdf = st.session_state.get('usuario_atual', 'Responsável Regional')
-            pdf = GeradorPDF(usuario_logado=usuario_pdf)
-            pdf.add_page()
-            pdf.set_font("helvetica", "B", 11)
-            pdf.cell(0, 10, f"Fechamento Mensal - Referência: {meses_nome[mes_atual_num]}/{ano_atual_num}", ln=True)
-            pdf.ln(5)
-            
-            larguras = [20, 25, 32, 73, 22, 23] 
-            pdf.set_fill_color(200, 220, 255)
-            pdf.cell(larguras[0], 10, "ID", border=1, fill=True)
-            pdf.cell(larguras[1], 10, "Data", border=1, fill=True)
-            pdf.cell(larguras[2], 10, "Cidade", border=1, fill=True)
-            pdf.cell(larguras[3], 10, "Descrição", border=1, fill=True)
-            pdf.cell(larguras[4], 10, "Tipo", border=1, fill=True)
-            pdf.cell(larguras[5], 10, "Valor", border=1, fill=True, ln=True)
-            
-            pdf.set_font("helvetica", "", 9)
-            for index, row in df_exibicao.iterrows():
-                texto_desc = str(row[colunas[4]])
-                largura_real_texto = pdf.get_string_width(texto_desc)
-                num_linhas = math.ceil(largura_real_texto / (larguras[3] - 3))
-                if num_linhas < 1: num_linhas = 1
-                
-                altura_da_linha_final = num_linhas * 6
-                y_topo = pdf.get_y()
-                
-                pdf.cell(larguras[0], altura_da_linha_final, str(row[colunas[0]]), border=1)
-                pdf.cell(larguras[1], altura_da_linha_final, str(row[colunas[1]]), border=1)
-                pdf.cell(larguras[2], altura_da_linha_final, str(row[colunas[2]])[:15], border=1)
-                x_pos_desc = pdf.get_x()
-                
-                pdf.multi_cell(larguras[3], 6, texto_desc, border=1)
-                pdf.set_xy(x_pos_desc + larguras[3], y_topo)
-                
-                pdf.cell(larguras[4], altura_da_linha_final, str(row[colunas[3]]), border=1)
-                pdf.cell(larguras[5], altura_da_linha_final, f"R$ {row[colunas[5]]:.2f}", border=1)
-                pdf.set_xy(10, y_topo + altura_da_linha_final)
-            
-            pdf_bytes = bytes(pdf.output())
-            st.download_button(
-                label="📥 Exportar Fechamento do Mês Atual em PDF",
-                data=pdf_bytes,
-                file_name=f"Fechamento_{meses_nome[mes_atual_num]}_{ano_atual_num}.pdf",
-                mime="application/pdf",
-                use_container_width=True
+            dados_editados = st.data_editor(
+                df_editor[[nome_col_id, nome_col_data, nome_col_cidade, nome_col_tipo, nome_col_desc, nome_col_valor]],
+                use_container_width=True,
+                hide_index=True,
+                disabled=[nome_col_id], # Bloqueia o ID para ninguém alterar sem querer
+                column_config={
+                    nome_col_id: st.column_config.TextColumn("ID", width="small"),
+                    nome_col_data: st.column_config.TextColumn("Data (DD/MM/AAAA)"),
+                    nome_col_cidade: st.column_config.SelectboxColumn("Igreja / Cidade", options=lista_cidades),
+                    nome_col_tipo: st.column_config.SelectboxColumn("Tipo", options=["Entrada", "Saída"]),
+                    nome_col_desc: st.column_config.TextColumn("Descrição / Histórico"),
+                    nome_col_valor: st.column_config.NumberColumn("Valor (R$)", format="%.2f"),
+                },
+                key="tabela_financeira_direta"
             )
             
-            st.markdown("---")
-            st.subheader("🛠️ Painel de Ajustes e Correções")
+            # Captura se o usuário alterou alguma linha da tabela acima
+            mudancas = st.session_state["tabela_financeira_direta"].get("edited_rows", {})
             
-            tab_editar, tab_deletar = st.tabs(["✏️ Corrigir Lançamento", "❌ Excluir Lançamento"])
-            
-            with tab_editar:
-                id_lista = df_mes_atual[nome_col_id].tolist()
-                id_selecionado = st.selectbox("Selecione o ID do Lançamento que deseja CORRIGIR:", id_lista, key="id_edit")
-                
-                if id_selecionado:
-                    linha_original = df_mes_atual[df_mes_atual[nome_col_id] == id_selecionado].iloc[0]
+            if mudancas:
+                st.warning("⚠️ Você fez alterações diretamente nos campos da tabela acima!")
+                if st.button("💾 Gravar Alterações Diretas na Planilha", use_container_width=True, type="primary"):
+                    sucesso_geral = True
                     
-                    with st.form("form_correcao"):
-                        col_ed1, col_ed2 = st.columns(2)
-                        with col_ed1:
-                            nova_data = st.date_input("Corrigir Data", value=pd.to_datetime(linha_original[nome_col_data]), format="DD/MM/YYYY")
-                            novo_tipo = st.selectbox("Corrigir Tipo", ["Entrada", "Saída"], index=0 if linha_original[nome_col_tipo] == "Entrada" else 1)
-                        with col_ed2:
-                            lista_cidades_ed = buscar_cidades()
-                            idx_cid = lista_cidades_ed.index(linha_original[nome_col_cidade]) if linha_original[nome_col_cidade] in lista_cidades_ed else 0
-                            nova_cidade = st.selectbox("Corrigir Igreja/Cidade", lista_cidades_ed, index=idx_cid)
-                            novo_valor = st.number_input("Corrigir Valor (R$)", min_value=0.0, value=float(linha_original[nome_col_valor]), format="%.2f")
+                    # Processa cada linha alterada na tabela dinâmica
+                    for indice_linha_str, novos_campos in mudancas.items():
+                        indice_linha = int(indice_linha_str)
+                        linha_original = df_mes_atual.iloc[indice_linha]
+                        id_alvo = str(linha_original[nome_col_id])
                         
-                        nova_desc = st.text_input("Corrigir Descrição", value=str(linha_original[nome_col_desc]))
-                        botao_atualizar = st.form_submit_button("Salvar Correções no Sistema", use_container_width=True)
+                        # Monta os dados mesclando o original com o que foi digitado de novo
+                        data_final = novos_campos.get(nome_col_data, linha_original[nome_col_data].strftime("%d/%m/%Y"))
+                        cidade_final = novos_campos.get(nome_col_cidade, str(linha_original[nome_col_cidade]))
+                        tipo_final = novos_campos.get(nome_col_tipo, str(linha_original[nome_col_tipo]))
+                        desc_final = novos_campos.get(nome_col_desc, str(linha_original[nome_col_desc]))
+                        valor_final = str(novos_campos.get(nome_col_valor, float(linha_original[nome_col_valor])))
                         
-                        if botao_atualizar:
-                            dados_update = {
-                                "action": "editarLancamento",
-                                "id_lancamento": str(id_selecionado),
-                                "data_lancamento": nova_data.strftime("%d/%m/%Y"),
-                                "cidade": nova_cidade,
-                                "tipo": novo_tipo,
-                                "descricao": nova_desc,
-                                "valor": str(novo_valor),  # CORRIGIDO: Convertido em String para o Apps Script processar com sucesso
-                                "usuario": st.session_state['usuario_atual']
-                            }
-                            try:
-                                with st.spinner("A enviar correções para a planilha..."):
-                                    res_up = requests.post(APPS_SCRIPT_URL, json=dados_update)
-                                    if res_up.status_code == 200:
-                                        st.success("Glória a Deus! Lançamento corrigido com sucesso! Atualizando...")
-                                        # Limpa o cache para garantir que puxe a informação nova da planilha
-                                        st.cache_data.clear()
-                                        st.rerun()
-                                    else:
-                                        st.error("Erro técnico na alteração junto ao servidor.")
-                            except Exception as e:
-                                st.error(f"Falha de rede: {e}")
+                        dados_update = {
+                            "action": "editarLancamento",
+                            "id_lancamento": id_alvo,
+                            "data_lancamento": data_final,
+                            "cidade": cidade_final,
+                            "tipo": tipo_final,
+                            "descricao": desc_final,
+                            "valor": valor_final,
+                            "usuario": st.session_state['usuario_atual']
+                        }
+                        
+                        try:
+                            res = requests.post(APPS_SCRIPT_URL, json=dados_update)
+                            if res.status_code != 200:
+                                sucesso_geral = False
+                        except:
+                            sucesso_geral = False
+                    
+                    if sucesso_geral:
+                        st.success("Glória a Deus! Todas as linhas alteradas foram atualizadas na planilha!")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error("Ocorreu uma falha ao tentar atualizar algumas linhas. Verifique a conexão.")
+
+            st.write("")
+            st.markdown("---")
             
-            with tab_deletar:
-                id_deletar = st.selectbox("Selecione o ID do Lançamento que deseja EXCLUIR:", df_mes_atual[nome_col_id].tolist(), key="id_del")
-                st.warning("⚠️ Atenção abençoado: esta operação é definitiva e apagará o registro selecionado!")
+            # Botões de utilidade adicionais (Exportar PDF e Exclusão Segura)
+            col_b1, col_b2 = st.columns([1, 1])
+            
+            with col_b1:
+                # GERADOR DO PDF MENSAL
+                usuario_pdf = st.session_state.get('usuario_atual', 'Responsável Regional')
+                pdf = GeradorPDF(usuario_logado=usuario_pdf)
+                pdf.add_page()
+                pdf.set_font("helvetica", "B", 11)
+                pdf.cell(0, 10, f"Fechamento Mensal - Referência: {meses_nome[mes_atual_num]}/{ano_atual_num}", ln=True)
+                pdf.ln(5)
                 
-                if st.button("🔴 Confirmar Exclusão Definitiva", use_container_width=True):
-                    dados_delete = {
-                        "action": "deletarLancamento",
-                        "id_lancamento": str(id_deletar)
-                    }
-                    try:
-                        with st.spinner("A remover registro da planilha..."):
+                larguras = [20, 25, 32, 73, 22, 23] 
+                pdf.set_fill_color(200, 220, 255)
+                pdf.cell(larguras[0], 10, "ID", border=1, fill=True)
+                pdf.cell(larguras[1], 10, "Data", border=1, fill=True)
+                pdf.cell(larguras[2], 10, "Cidade", border=1, fill=True)
+                pdf.cell(larguras[3], 10, "Descrição", border=1, fill=True)
+                pdf.cell(larguras[4], 10, "Tipo", border=1, fill=True)
+                pdf.cell(larguras[5], 10, "Valor", border=1, fill=True, ln=True)
+                
+                pdf.set_font("helvetica", "", 9)
+                for index, row in df_editor.iterrows():
+                    texto_desc = str(row[nome_col_desc])
+                    largura_real_texto = pdf.get_string_width(texto_desc)
+                    num_linhas = math.ceil(largura_real_texto / (larguras[3] - 3))
+                    if num_linhas < 1: num_linhas = 1
+                    
+                    altura_da_linha_final = num_linhas * 6
+                    y_topo = pdf.get_y()
+                    
+                    pdf.cell(larguras[0], altura_da_linha_final, str(row[nome_col_id]), border=1)
+                    pdf.cell(larguras[1], altura_da_linha_final, str(row[nome_col_data]), border=1)
+                    pdf.cell(larguras[2], altura_da_linha_final, str(row[nome_col_cidade])[:15], border=1)
+                    x_pos_desc = pdf.get_x()
+                    
+                    pdf.multi_cell(larguras[3], 6, texto_desc, border=1)
+                    pdf.set_xy(x_pos_desc + larguras[3], y_topo)
+                    
+                    pdf.cell(larguras[4], altura_da_linha_final, str(row[nome_col_tipo]), border=1)
+                    pdf.cell(larguras[5], altura_da_linha_final, f"R$ {row[nome_col_valor]:.2f}", border=1)
+                    pdf.set_xy(10, y_topo + altura_da_linha_final)
+                
+                pdf_bytes = bytes(pdf.output())
+                st.download_button(
+                    label="📥 Exportar Tabela Atual em PDF",
+                    data=pdf_bytes,
+                    file_name=f"Fechamento_{meses_nome[mes_atual_num]}_{ano_atual_num}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            
+            with col_b2:
+                # SISTEMA DE EXCLUSÃO SIMPLIFICADO POR ID
+                with st.popover("❌ Deletar um Lançamento", use_container_width=True):
+                    id_deletar = st.selectbox("Escolha o ID para remover definitivamente:", df_mes_atual[nome_col_id].tolist(), key="id_deletar_pop")
+                    st.write("A operação é final e tirará a linha do Google Sheets.")
+                    if st.button("Confirmar Remoção da Planilha", use_container_width=True, type="primary"):
+                        dados_delete = {
+                            "action": "deletarLancamento",
+                            "id_lancamento": str(id_deletar)
+                        }
+                        try:
                             res_del = requests.post(APPS_SCRIPT_URL, json=dados_delete)
                             if res_del.status_code == 200:
-                                st.success("Registro removido com sucesso! Sincronizando dados...")
-                                # Limpa o cache para garantir a sincronização imediata
+                                st.success("Registro apagado com sucesso!")
                                 st.cache_data.clear()
                                 st.rerun()
                             else:
-                                st.error("Erro ao tentar remover o lançamento da planilha.")
-                    except Exception as e:
-                        st.error(f"Falha ao conectar no servidor de exclusão: {e}")
+                                st.error("Erro interno ao deletar.")
+                        except Exception as e:
+                            st.error(f"Erro de conexão: {e}")
     else:
         st.info("Nenhum dado recebido do banco de dados da planilha.")
