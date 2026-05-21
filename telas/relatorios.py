@@ -97,7 +97,6 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             st.dataframe(df_exibicao[[nome_col_id, colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True, hide_index=True)
             
             # PDF GENERATOR
-           # Proteção para garantir que o sistema não caia se o estado da sessão demorar para carregar
             usuario_pdf = st.session_state.get('usuario_atual', 'Responsável Regional')
             pdf = GeradorPDF(usuario_logado=usuario_pdf)
             pdf.add_page()
@@ -183,12 +182,15 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                                 "usuario": st.session_state['usuario_atual']
                             }
                             try:
-                                res_up = requests.post(APPS_SCRIPT_URL, json=dados_update)
-                                if res_up.status_code == 200:
-                                    st.success("Glória a Deus! Lançamento corrigido com sucesso! Atualizando...")
-                                    st.rerun()
-                                else:
-                                    st.error("Erro técnico na alteração junto ao servidor.")
+                                with st.spinner("A atualizar dados na planilha..."):
+                                    res_up = requests.post(APPS_SCRIPT_URL, json=dados_update)
+                                    if res_up.status_code == 200:
+                                        st.success("Glória a Deus! Lançamento corrigido com sucesso! Atualizando...")
+                                        # LIMPA O CACHE PARA FORÇAR A BUSCA DE DADOS NOVOS
+                                        st.cache_data.clear()
+                                        st.rerun()
+                                    else:
+                                        st.error("Erro técnico na alteração junto ao servidor.")
                             except Exception as e:
                                 st.error(f"Falha de rede: {e}")
             
@@ -202,12 +204,15 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
                         "id_lancamento": str(id_deletar)
                     }
                     try:
-                        res_del = requests.post(APPS_SCRIPT_URL, json=dados_delete)
-                        if res_del.status_code == 200:
-                            st.success("Registro removido com sucesso! Sincronizando dados...")
-                            st.rerun()
-                        else:
-                            st.error("Erro ao tentar remover o lançamento da planilha.")
+                        with st.spinner("A remover registro da planilha..."):
+                            res_del = requests.post(APPS_SCRIPT_URL, json=dados_delete)
+                            if res_del.status_code == 200:
+                                st.success("Registro removido com sucesso! Sincronizando dados...")
+                                # LIMPA O CACHE PARA FORÇAR A BUSCA DE DADOS NOVOS
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error("Erro ao tentar remover o lançamento da planilha.")
                     except Exception as e:
                         st.error(f"Falha ao conectar no servidor de exclusão: {e}")
     else:
