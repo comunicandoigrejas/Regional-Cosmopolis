@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 import requests
 from datetime import datetime
-import math
-from fpdf import FPDF
 import os
+from fpdf import FPDF
 
 class GeradorPDF(FPDF):
     def header(self):
@@ -19,7 +18,6 @@ def processar_mudanca_direta(APPS_SCRIPT_URL, df_mes_selecionado, colunas):
             indice_linha = int(indice_linha_str)
             linha_original = df_mes_selecionado.iloc[indice_linha]
             
-            # Garante que a data seja tratada como string no formato DD/MM/AAAA
             data_str = novos_campos.get(colunas[1], linha_original[colunas[1]].strftime("%d/%m/%Y"))
             
             dados_update = {
@@ -56,11 +54,9 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
         colunas = dados[0]
         df = pd.DataFrame(dados[1:], columns=colunas)
         
-        # Converte para datetime garantindo que não tenha hora
         df[colunas[1]] = pd.to_datetime(df[colunas[1]], dayfirst=True, errors='coerce').dt.date
         df[colunas[5]] = pd.to_numeric(df[colunas[5]], errors='coerce').fillna(0)
         
-        # Filtro pelo mês e ano selecionados
         df_filtro = df[(pd.to_datetime(df[colunas[1]]).dt.month == mapa_meses[mes_escolhido]) & 
                        (pd.to_datetime(df[colunas[1]]).dt.year == ano_escolhido)].copy()
         
@@ -68,7 +64,6 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             st.warning("Nenhum lançamento encontrado neste período.")
             return
 
-        # Prepara para exibição como string formatada DD/MM/AAAA
         df_exibicao = df_filtro.copy()
         df_exibicao[colunas[1]] = df_exibicao[colunas[1]].apply(lambda x: x.strftime('%d/%m/%Y'))
 
@@ -81,26 +76,27 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             hide_index=True
         )
 
-        # GERAÇÃO DO PDF
+        # GERAÇÃO DO PDF USANDO ARQUIVO TEMPORÁRIO (A PROVA DE ERROS)
         pdf = GeradorPDF()
         pdf.add_page()
         pdf.set_font("helvetica", "", 12)
         pdf.cell(0, 10, f"Fechamento: {mes_escolhido}/{ano_escolhido}", ln=True)
         
-        pdf_conteudo = pdf.output()
+        nome_arquivo = "temp_relatorio.pdf"
+        pdf.output(nome_arquivo)
         
-        # Garante o formato de bytes para download
-        if isinstance(pdf_conteudo, str):
-            pdf_bytes = pdf_conteudo.encode('latin-1')
-        else:
-            pdf_bytes = pdf_conteudo
-
-        st.download_button(
-            label="📥 Baixar PDF deste período",
-            data=pdf_bytes,
-            file_name=f"Relatorio_{mes_escolhido}_{ano_escolhido}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+        with open(nome_arquivo, "rb") as f:
+            st.download_button(
+                label="📥 Baixar PDF deste período",
+                data=f,
+                file_name=f"Relatorio_{mes_escolhido}_{ano_escolhido}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        
+        # Remove o arquivo temporário após criar o botão
+        if os.path.exists(nome_arquivo):
+            os.remove(nome_arquivo)
+            
     else:
         st.error("Erro ao carregar dados da planilha.")
