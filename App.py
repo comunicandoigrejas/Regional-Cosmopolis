@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-# IMPORTAÇÃO CORRETA APONTANDO PARA A PASTA MODULOS (E ARQUIVOS MINÚSCULOS)
+# IMPORTAÇÃO APONTANDO PARA A PASTA PAGES COM OS ARQUIVOS TOTALMENTE MINÚSCULOS
 from pages.lancamentos import renderizar_tela_lancamentos
 from pages.relatorios import renderizar_tela_relatorios
 from pages.alterar_senha import renderizar_tela_senha
