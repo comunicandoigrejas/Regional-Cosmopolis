@@ -1,10 +1,10 @@
 import streamlit as st
 import requests
 
-# IMPORTAÇÃO APONTANDO PARA A PASTA PAGES COM OS ARQUIVOS TOTALMENTE MINÚSCULOS
-from pages.lancamentos import renderizar_tela_lancamentos
-from pages.relatorios import renderizar_tela_relatorios
-from pages.alterar_senha import renderizar_tela_senha
+# IMPORTAÇÃO APONTANDO PARA A NOVA PASTA "TELAS" (LIVRE DE BLOQUEIOS DE CACHE)
+from telas.lancamentos import renderizar_tela_lancamentos
+from telas.relatorios import renderizar_tela_relatorios
+from telas.alterar_senha import renderizar_tela_senha
 
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
