@@ -58,8 +58,8 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             pdf.set_font("helvetica", "", 12)
             pdf.cell(0, 10, f"Fechamento: {mes_escolhido}/{ano_escolhido}", ln=True)
             
-            # Converte o PDF para bytes corretamente
-            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+           # A versão atual da biblioteca fpdf2 usa o método output() para retornar os bytes diretamente
+            pdf_bytes = pdf.output()
             
             st.download_button(
                 label="📥 Baixar PDF deste período",
