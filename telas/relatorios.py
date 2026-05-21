@@ -97,7 +97,9 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
             st.dataframe(df_exibicao[[nome_col_id, colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True, hide_index=True)
             
             # PDF GENERATOR
-            pdf = GeradorPDF(usuario_logado=st.session_state['usuario_atual'])
+           # Proteção para garantir que o sistema não caia se o estado da sessão demorar para carregar
+            usuario_pdf = st.session_state.get('usuario_atual', 'Responsável Regional')
+            pdf = GeradorPDF(usuario_logado=usuario_pdf)
             pdf.add_page()
             pdf.set_font("helvetica", "B", 11)
             pdf.cell(0, 10, f"Fechamento Mensal - Referência: {meses_nome[mes_atual_num]}/{ano_atual_num}", ln=True)
