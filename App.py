@@ -88,13 +88,14 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF ABENÇOADO COM SUPORTE A LOGO
+# 5. GERADOR DE PDF ABENÇOADO COM SUPORTE A LOGO NA PASTA ASSETS
 class GeradorPDF(FPDF):
     def header(self):
-        # Verifica se existe o arquivo logo.png na pasta para não dar erro
-        if os.path.exists("logo.png"):
-            self.image("logo.png", x=10, y=8, w=30)
-            self.set_x(45) # Desloca o texto para o lado do logo
+        # CAMINHO CORRIGIDO: Puxa o logo de dentro da pasta assets do GitHub
+        caminho_logo = os.path.join("assets", "logo.png")
+        if os.path.exists(caminho_logo):
+            self.image(caminho_logo, x=10, y=8, w=30)
+            self.set_x(45) # Desloca o texto para o lado do logo do GitHub
         
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(43, 27, 84) 
@@ -135,7 +136,7 @@ if not st.session_state['logado']:
         if st.button("Entrar no Sistema"):
             if verificar_login(usuario_input, senha):
                 st.session_state['logado'] = True
-                st.session_state['usuario_atual'] = usuario_input  # Guarda exatamente quem entrou!
+                st.session_state['usuario_atual'] = usuario_input  # Guarda dinamicamente o usuário logado
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos, varão. Tente novamente!")
@@ -147,7 +148,7 @@ else:
     st.sidebar.title("🕊️ Menu Principal")
     st.sidebar.write(f"Usuário ativo: **{st.session_state['usuario_atual']}**")
     
-    # Criando as duas abas/janelas para deixar o sistema super leve
+    # Menu para alternar janelas mantendo a leveza do sistema
     menu = st.sidebar.radio("Navegação", ["📝 Registrar Lançamentos", "📊 Gerar Relatórios"])
     
     st.sidebar.markdown("---")
@@ -186,7 +187,7 @@ else:
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
-                        "usuario": st.session_state['usuario_atual'] # Registra dinamicamente quem está logado!
+                        "usuario": st.session_state['usuario_atual'] # Salva o usuário dinâmico (ex: teste)
                     }
                     try:
                         resposta_post = requests.post(APPS_SCRIPT_URL, json=dados_envio)
@@ -220,7 +221,7 @@ else:
                     nome_col_valor = colunas[5]
                     nome_col_tipo = colunas[3]
                     
-                    # Ajuste de timezone e datas
+                    # Correção e purificação de fusos horários das datas
                     df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
                     
@@ -247,7 +248,7 @@ else:
                         df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
                         st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
                         
-                        # GERAÇÃO DO PDF EXIBINDO TUDO
+                        # GERAÇÃO DO PDF PROFISSIONAL COM QUEBRA DE LINHA COMPLETA
                         pdf = GeradorPDF()
                         pdf.add_page()
                         
@@ -256,54 +257,60 @@ else:
                         pdf.cell(0, 10, f"Entradas: R$ {entradas:.2f} | Saídas: R$ {saidas:.2f} | Saldo: R$ {saldo:.2f}", ln=True)
                         pdf.ln(5)
                         
+                        # Definição das larguras exatas das colunas (Total = 190mm para caber no A4)
+                        larguras = [23, 32, 85, 25, 25] 
+                        
                         # Cabeçalho da Tabela
                         pdf.set_fill_color(200, 220, 255)
                         pdf.set_font("helvetica", "B", 10)
-                        pdf.cell(23, 10, "Data", border=1, fill=True)
-                        pdf.cell(32, 10, "Cidade", border=1, fill=True)
-                        pdf.cell(85, 10, "Descrição", border=1, fill=True)
-                        pdf.cell(25, 10, "Tipo", border=1, fill=True)
-                        pdf.cell(25, 10, "Valor", border=1, fill=True, ln=True)
+                        pdf.cell(larguras[0], 10, "Data", border=1, fill=True)
+                        pdf.cell(larguras[1], 10, "Cidade", border=1, fill=True)
+                        pdf.cell(larguras[2], 10, "Descrição", border=1, fill=True)
+                        pdf.cell(larguras[3], 10, "Tipo", border=1, fill=True)
+                        pdf.cell(larguras[4], 10, "Valor", border=1, fill=True, ln=True)
                         
-                        # Linhas da tabela com cálculo dinâmico de altura
+                        # Linhas dinâmicas
                         pdf.set_font("helvetica", "", 9)
-                        largura_desc = 85
-                        altura_base_linha = 7 # Altura de uma linha de texto simples
+                        altura_base_texto = 6  # Tamanho ideal para cada linha de texto dentro da célula
                         
                         for index, row in df_exibicao.iterrows():
                             texto_desc = str(row[colunas[4]])
                             
-                            # Calcula quantas linhas a descrição vai precisar ocupar dentro dos 85mm de largura
-                            largura_texto = pdf.get_string_width(texto_desc)
-                            num_linhas = math.ceil(largura_texto / (largura_desc - 3)) # margem de segurança de 3mm
+                            # Calcula dinamicamente quantas linhas a descrição precisa baseada no tamanho do texto
+                            largura_real_texto = pdf.get_string_width(texto_desc)
+                            num_linhas = math.ceil(largura_real_texto / (larguras[2] - 3)) # 3mm de margem
                             if num_linhas < 1:
                                 num_linhas = 1
-                                
-                            # Força a altura de TODAS as colunas a se ajustarem pelo tamanho da descrição
-                            altura_da_linha_calculada = num_linhas * altura_base_linha
                             
-                            # Guarda o Y antes de iniciar a linha
-                            y_inicial = pdf.get_y()
+                            # Multiplica a quantidade de linhas pelo tamanho do texto para definir a altura uniforme da linha inteira
+                            altura_da_linha_final = num_linhas * altura_base_texto
                             
-                            # Desenha as colunas iniciais com a nova altura unificada
-                            pdf.cell(23, altura_da_linha_calculada, str(row[colunas[1]]), border=1)
-                            pdf.cell(32, altura_da_linha_calculada, str(row[colunas[2]])[:15], border=1)
+                            # Registra a posição do topo da linha
+                            y_topo = pdf.get_y()
                             
-                            # Posição X exata antes de aplicar o multi_cell na descrição
-                            x_desc = pdf.get_x()
+                            # Coluna 1: Data (Usa a altura calculada)
+                            pdf.cell(larguras[0], altura_da_linha_final, str(row[colunas[1]]), border=1)
                             
-                            # O multi_cell faz a mágica de quebrar o texto nativamente
-                            pdf.multi_cell(largura_desc, altura_base_linha, texto_desc, border=1)
+                            # Coluna 2: Cidade (Usa a altura calculada)
+                            pdf.cell(larguras[1], altura_da_linha_final, str(row[colunas[2]])[:15], border=1)
                             
-                            # Move o cursor para o topo direito da descrição para fazer o restante das colunas
-                            pdf.set_xy(x_desc + largura_desc, y_inicial)
+                            # Salva o X exato onde a descrição deve iniciar
+                            x_pos_desc = pdf.get_x()
                             
-                            # Desenha as colunas finais com a mesma altura calculada
-                            pdf.cell(25, altura_da_linha_calculada, str(row[colunas[3]]), border=1)
-                            pdf.cell(25, altura_da_linha_calculada, f"R$ {row[colunas[5]]:.2f}", border=1)
+                            # Coluna 3: Descrição (Aqui usamos multi_cell para fazer as quebras automáticas)
+                            pdf.multi_cell(larguras[2], altura_base_texto, texto_desc, border=1)
                             
-                            # Move o cursor definitivamente para a base da linha atual para começar a próxima registro na tabela
-                            pdf.set_xy(10, y_inicial + altura_da_linha_calculada)
+                            # Move o cursor para o lado direito da descrição no mesmo topo (Y) para fazer o restante
+                            pdf.set_xy(x_pos_desc + larguras[2], y_topo)
+                            
+                            # Coluna 4: Tipo (Usa a altura calculada)
+                            pdf.cell(larguras[3], altura_da_linha_final, str(row[colunas[3]]), border=1)
+                            
+                            # Coluna 5: Valor (Usa a altura calculada)
+                            pdf.cell(larguras[4], altura_da_linha_final, f"R$ {row[colunas[5]]:.2f}", border=1)
+                            
+                            # Envia o cursor de volta para a margem esquerda e logo abaixo da linha recém-criada
+                            pdf.set_xy(10, y_topo + altura_da_linha_final)
                         
                         pdf_bytes = bytes(pdf.output())
                         
