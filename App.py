@@ -169,7 +169,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade, # Corrigido de 'city' para 'cidade'
+                        "cidade": cidade,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -207,8 +207,10 @@ else:
                     nome_col_valor = colunas[5]
                     nome_col_tipo = colunas[3]
                     
-                    # Tratamento adaptativo de data para evitar que vire NaT incorretamente
-                    df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True)
+                    # -------------------------------------------------------------
+                    # SOLUÇÃO BLINDADA: Força padrão UTC e remove o fuso horário (tz_localize(None))
+                    # -------------------------------------------------------------
+                    df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
                     
                     if df[nome_col_data].isna().all():
@@ -217,13 +219,13 @@ else:
                     data_inicio_pd = pd.to_datetime(data_inicio)
                     data_fim_pd = pd.to_datetime(data_fim)
                     mask = (df[nome_col_data] >= data_inicio_pd) & (df[nome_col_data] <= data_fim_pd)
+                    # -------------------------------------------------------------
                     
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
                         st.warning("Nenhum lançamento encontrado neste período selecionado, irmão Willian. Tente estender as datas inicial e final para testar.")
                         
-                        # Bloco de ajuda para depuração visual temporária
                         with st.expander("Ver dados brutos recebidos da planilha"):
                             st.write("Colunas detectadas:", colunas)
                             st.dataframe(df.head(10))
