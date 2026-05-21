@@ -121,8 +121,9 @@ def buscar_cidades():
         if resposta.status_code == 200:
             dados = resposta.json()
             if dados["status"] == "sucesso":
-                return [linha[0] for inline in dados["dados"][1:] if linha[0] != ""]
-    except:
+                # LINHA CORRIGIDA AQUI, IRMÃO WILLIAN!
+                return [linha[0] for linha in dados["dados"][1:] if linha[0] != ""]
+    except Exception as e:
         pass
     return ["Cosmópolis", "Erro de Conexão"]
 
@@ -206,7 +207,6 @@ else:
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
         st.write("")
         
-        # Três colunas perfeitas para os três novos botões em formato de card grande
         col_card1, col_card2, col_card3 = st.columns(3)
         
         with col_card1:
@@ -229,7 +229,6 @@ else:
         
         st.write("")
         st.write("")
-        # Botão de Sair limpo abaixo dos cards
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
             st.session_state['usuario_atual'] = ""
@@ -268,7 +267,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade,
+                        "cidade": city,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -392,7 +391,7 @@ else:
                 else:
                     st.info("A planilha retornou vazia ou sem linhas válidas para o período.")
 
-    # --- JANELA: ALTERAÇÃO DE SENHA ---
+# --- JANELA: ALTERAÇÃO DE SENHA ---
     elif st.session_state['tela_atual'] == "alterar_senha":
         col_nav1, col_nav2 = st.columns([6, 2])
         with col_nav1:
@@ -431,7 +430,7 @@ else:
                                 dados_retorno = resposta_senha.json()
                                 if dados_retorno.get("status") == "sucesso":
                                     st.success("Glória a Deus! Sua senha foi alterada com sucesso!")
-                                    st.session_state['senha_atual'] = nova_senha # Atualiza o app em tempo de execução
+                                    st.session_state['senha_atual'] = nova_senha 
                                 else:
                                     st.error(f"Erro informado pela planilha: {dados_retorno.get('mensagem')}")
                             else:
