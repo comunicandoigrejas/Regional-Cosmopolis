@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
 import io
+import os
 
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🕊️", layout="wide")
@@ -86,13 +87,18 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF ABENÇOADO
+# 5. GERADOR DE PDF ABENÇOADO COM SUPORTE A LOGO
 class GeradorPDF(FPDF):
     def header(self):
+        # Verifica se existe o arquivo logo.png na pasta para não dar erro
+        if os.path.exists("logo.png"):
+            self.image("logo.png", x=10, y=8, w=33)
+            self.set_x(45) # Desloca o texto para o lado do logo
+        
         self.set_font('helvetica', 'B', 16)
         self.set_text_color(43, 27, 84) 
-        self.cell(0, 10, 'Relatório Financeiro - Regional Cosmópolis', align='C')
-        self.ln(20)
+        self.cell(0, 10, 'Relatório Financeiro - Regional Cosmópolis', align='C', ln=True)
+        self.ln(15)
 
     def footer(self):
         self.set_y(-40)
@@ -100,7 +106,7 @@ class GeradorPDF(FPDF):
         self.line(60, self.get_y(), 150, self.get_y()) 
         self.ln(2)
         self.set_font('helvetica', 'B', 10)
-        self.cell(0, 10, 'Assinatura da Pastora', align='C')
+        self.cell(0, 10, 'Assinatura do Responsável', align='C')
         self.ln(10)
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
@@ -110,6 +116,8 @@ class GeradorPDF(FPDF):
 # 6. GERENCIAMENTO DE SESSÃO
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
+if 'usuario_atual' not in st.session_state:
+    st.session_state['usuario_atual'] = ""
 
 # ==========================================
 # TELA 1: LOGIN DO SISTEMA
@@ -120,31 +128,35 @@ if not st.session_state['logado']:
         st.title("🕊️ Financeiro Regional")
         st.write("A paz do Senhor! Faça seu login.")
         
-        usuario = st.text_input("Usuário")
+        usuario_input = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         
         if st.button("Entrar no Sistema"):
-            if verificar_login(usuario, senha):
+            if verificar_login(usuario_input, senha):
                 st.session_state['logado'] = True
+                st.session_state['usuario_atual'] = usuario_input  # Guarda exatamente quem entrou!
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos, varão. Tente novamente!")
 
 # ==========================================
-# TELA 2: DENTRO DO SISTEMA
+# TELA 2: DENTRO DO SISTEMA (PÁGINAS SEPARADAS)
 # ==========================================
 else:
     st.sidebar.title("🕊️ Menu Principal")
-    st.sidebar.write("Bem-vinda, Pastora!")
-    menu = st.sidebar.radio("Navegação", ["Lançamentos", "Relatórios"])
+    st.sidebar.write(f"Usuário ativo: **{st.session_state['usuario_atual']}**")
+    
+    # Criando as duas abas/janelas para deixar o sistema super leve
+    menu = st.sidebar.radio("Navegação", ["📝 Registrar Lançamentos", "📊 Gerar Relatórios"])
     
     st.sidebar.markdown("---")
     if st.sidebar.button("Sair do Sistema"):
         st.session_state['logado'] = False
+        st.session_state['usuario_atual'] = ""
         st.rerun()
 
-    # --- ABA DE LANÇAMENTOS ---
-    if menu == "Lançamentos":
+    # --- JANELA 1: APENAS LANÇAMENTOS ---
+    if menu == "📝 Registrar Lançamentos":
         st.title("📝 Registrar Movimentação")
         
         cidades_lista = buscar_cidades()
@@ -169,23 +181,23 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade,
+                        "cidade": city,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
-                        "usuario": "Pastora" 
+                        "usuario": st.session_state['usuario_atual'] # Registra dinamicamente quem está logado!
                     }
                     try:
                         resposta_post = requests.post(APPS_SCRIPT_URL, json=dados_envio)
                         if resposta_post.status_code == 200:
-                            st.success("Aleluia! Lançamento registrado com sucesso!")
+                            st.success(f"Aleluia! Lançamento registrado com sucesso pelo usuário {st.session_state['usuario_atual']}!")
                         else:
                             st.error(f"Erro ao gravar na planilha. Código: {resposta_post.status_code}")
                     except Exception as e:
                         st.error(f"Erro de conexão no envio: {e}")
 
-    # --- ABA DE RELATÓRIOS ---
-    elif menu == "Relatórios":
+    # --- JANELA 2: APENAS RELATÓRIOS ---
+    elif menu == "📊 Gerar Relatórios":
         st.title("📊 Relatórios e Exportação")
         
         col1, col2 = st.columns(2)
@@ -195,7 +207,7 @@ else:
             data_fim = st.date_input("Data Final", format="DD/MM/YYYY")
             
         if st.button("Buscar Lançamentos"):
-            with st.spinner("Buscando as bençãos e despesas na planilha..."):
+            with st.spinner("Buscando as bênçãos e despesas na planilha..."):
                 dados = buscar_lancamentos()
                 
                 if len(dados) > 1:
@@ -207,28 +219,18 @@ else:
                     nome_col_valor = colunas[5]
                     nome_col_tipo = colunas[3]
                     
-                    # -------------------------------------------------------------
-                    # SOLUÇÃO BLINDADA: Força padrão UTC e remove o fuso horário (tz_localize(None))
-                    # -------------------------------------------------------------
+                    # Ajuste de timezone e datas
                     df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
                     df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
-                    
-                    if df[nome_col_data].isna().all():
-                        st.error("Aviso: As datas vindas da planilha não puderam ser lidas no formato correto. Verifique a coluna de datas na sua tabela do Google Sheets!")
                     
                     data_inicio_pd = pd.to_datetime(data_inicio)
                     data_fim_pd = pd.to_datetime(data_fim)
                     mask = (df[nome_col_data] >= data_inicio_pd) & (df[nome_col_data] <= data_fim_pd)
-                    # -------------------------------------------------------------
                     
                     df_filtrado = df.loc[mask].copy()
                     
                     if df_filtrado.empty:
-                        st.warning("Nenhum lançamento encontrado neste período selecionado, irmão Willian. Tente estender as datas inicial e final para testar.")
-                        
-                        with st.expander("Ver dados brutos recebidos da planilha"):
-                            st.write("Colunas detectadas:", colunas)
-                            st.dataframe(df.head(10))
+                        st.warning("Nenhum lançamento encontrado neste período selecionado, irmão Willian.")
                     else:
                         entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
                         saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
@@ -238,16 +240,13 @@ else:
                         c1, c2, c3 = st.columns(3)
                         c1.success(f"Entradas: R$ {entradas:.2f}")
                         c2.error(f"Saídas: R$ {saidas:.2f}")
-                        if saldo >= 0:
-                            c3.info(f"Saldo: R$ {saldo:.2f}")
-                        else:
-                            c3.warning(f"Saldo: R$ {saldo:.2f}")
+                        c3.info(f"Saldo: R$ {saldo:.2f}")
                         
                         df_exibicao = df_filtrado.copy()
                         df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
                         st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
                         
-                        # GERAÇÃO DO PDF
+                        # GERAÇÃO DO PDF EXIBINDO TUDO
                         pdf = GeradorPDF()
                         pdf.add_page()
                         
@@ -258,17 +257,18 @@ else:
                         
                         pdf.set_fill_color(200, 220, 255)
                         pdf.set_font("helvetica", "B", 10)
-                        pdf.cell(25, 10, "Data", border=1, fill=True)
-                        pdf.cell(35, 10, "Cidade", border=1, fill=True)
-                        pdf.cell(80, 10, "Descrição", border=1, fill=True)
+                        pdf.cell(23, 10, "Data", border=1, fill=True)
+                        pdf.cell(32, 10, "Cidade", border=1, fill=True)
+                        pdf.cell(85, 10, "Descrição", border=1, fill=True) # Aumentado espaço da descrição
                         pdf.cell(25, 10, "Tipo", border=1, fill=True)
                         pdf.cell(25, 10, "Valor", border=1, fill=True, ln=True)
                         
                         pdf.set_font("helvetica", "", 9)
                         for index, row in df_exibicao.iterrows():
-                            pdf.cell(25, 8, str(row[colunas[1]]), border=1)
-                            pdf.cell(35, 8, str(row[colunas[2]])[:15], border=1) 
-                            pdf.cell(80, 8, str(row[colunas[4]])[:40], border=1)
+                            pdf.cell(23, 8, str(row[colunas[1]]), border=1)
+                            pdf.cell(32, 8, str(row[colunas[2]])[:15], border=1) 
+                            # Agora exibe a descrição completa sem o corte [:40] anterior
+                            pdf.cell(85, 8, str(row[colunas[4]]), border=1) 
                             pdf.cell(25, 8, str(row[colunas[3]]), border=1)
                             pdf.cell(25, 8, f"R$ {row[colunas[5]]:.2f}", border=1, ln=True)
                         
@@ -281,4 +281,4 @@ else:
                             mime="application/pdf"
                         )
                 else:
-                    st.info("A planilha retornou vazia ou o script do Google não entregou linhas válidas.")
+                    st.info("A planilha retornou vazia ou sem linhas válidas.")
