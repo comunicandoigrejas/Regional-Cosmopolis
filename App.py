@@ -34,8 +34,8 @@ st.markdown("""
     div.stButton > button {
         border-radius: 12px !important;
         padding: 30px 20px !important;
-        background-color: #f0f2f6 !important; /* Fundo cinza claro idêntico ao anterior */
-        border: 2px solid #2b1b54 !important; /* Borda fina em tom Roxo/Azul */
+        background-color: #f0f2f6 !important; /* Fundo cinza claro */
+        border: 2px solid #2b1b54 !important; /* Borda fina Roxo/Azul */
         transition: all 0.3s ease;
         height: auto !important;
         min-height: 140px;
@@ -45,16 +45,16 @@ st.markdown("""
         justify-content: center;
     }
     
-    /* Efeito ao passar o mouse por cima do Card */
+    /* Efeito ao passar o mouse por cima do Card (Laranja) */
     div.stButton > button:hover {
-        background-color: #ff8c00 !important; /* Laranja quando passa o mouse */
+        background-color: #ff8c00 !important; 
         border-color: #ff8c00 !important;
         box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.15);
     }
     
     /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Fonte Escura) */
     div.stButton > button p {
-        color: #1e1e1e !important; /* Cor cinza bem escura/preta para leitura perfeita */
+        color: #1e1e1e !important; 
         font-size: 16px !important;
     }
     
@@ -166,6 +166,8 @@ if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 if 'usuario_atual' not in st.session_state:
     st.session_state['usuario_atual'] = ""
+if 'senha_atual' not in st.session_state:
+    st.session_state['senha_atual'] = ""
 if 'tela_atual' not in st.session_state:
     st.session_state['tela_atual'] = "menu"
 
@@ -180,19 +182,20 @@ if not st.session_state['logado']:
         st.write("A paz do Senhor! Faça seu login.")
         
         usuario_input = st.text_input("Usuário")
-        senha = st.text_input("Senha", type="password")
+        senha_input = st.text_input("Senha", type="password")
         
         if st.button("Entrar no Sistema", use_container_width=True):
-            if verificar_login(usuario_input, senha):
+            if verificar_login(usuario_input, senha_input):
                 st.session_state['logado'] = True
                 st.session_state['usuario_atual'] = usuario_input
+                st.session_state['senha_atual'] = senha_input # Guardamos para validação na troca
                 st.session_state['tela_atual'] = "menu"
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos, varão. Tente novamente!")
 
 # ==========================================
-# TELA 2: SISTEMA LOGADO (SEM BARRA LATERAL)
+# TELA 2: SISTEMA LOGADO
 # ==========================================
 else:
     # --- JANELA: MENU PRINCIPAL DE BOTÕES ---
@@ -201,12 +204,10 @@ else:
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
         st.write("")
         
-        # Criamos duas colunas largas para colocar os dois Cards lado a lado
-        col_card1, col_card2 = st.columns(2)
+        # Criamos três colunas para colocar os três Cards lado a lado organizados
+        col_card1, col_card2, col_card3 = st.columns(3)
         
         with col_card1:
-            # O texto formatado com tags HTML vai diretamente para o parâmetro do botão.
-            # O CSS que colocamos lá em cima cuida de deixar a fonte escura e quebrar a linha.
             texto_card1 = "**📝 Registrar Movimentações**\n\nInsira novas entradas e saídas de dízimos, ofertas ou despesas."
             if st.button(texto_card1, use_container_width=True, key="card_lancamentos"):
                 st.session_state['tela_atual'] = "lancamentos"
@@ -217,13 +218,20 @@ else:
             if st.button(texto_card2, use_container_width=True, key="card_relatorios"):
                 st.session_state['tela_atual'] = "relatorios"
                 st.rerun()
+
+        with col_card3:
+            texto_card3 = "**🔑 Alterar Minha Senha**\n\nMude sua senha padrão de acesso para garantir mais segurança."
+            if st.button(texto_card3, use_container_width=True, key="card_senha"):
+                st.session_state['tela_atual'] = "alterar_senha"
+                st.rerun()
         
         st.write("")
         st.write("")
-        # Botão de Sair posicionado abaixo dos cards de forma centralizada ou limpa
+        # Botão de Sair posicionado abaixo dos cards
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
             st.session_state['usuario_atual'] = ""
+            st.session_state['senha_atual'] = ""
             st.session_state['tela_atual'] = "menu"
             st.rerun()
 
@@ -381,6 +389,53 @@ else:
                         )
                 else:
                     st.info("A planilha retornou vazia ou sem linhas válidas para o período.")
+
+    # --- JANELA: ALTERAÇÃO DE SENHA ---
+    elif st.session_state['tela_atual'] == "alterar_senha":
+        col_nav1, col_nav2 = st.columns([6, 2])
+        with col_nav1:
+            st.title("🔑 Alterar Credenciais de Acesso")
+        with col_nav2:
+            if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
+                st.session_state['tela_atual'] = "menu"
+                st.rerun()
+                
+        with st.form("form_mudar_senha", clear_on_submit=True):
+            st.write(f"Preencha os campos abaixo para atualizar a segurança do usuário: **{st.session_state['usuario_atual']}**")
+            
+            senha_atual_input = st.text_input("Digite sua Senha Atual", type="password")
+            nova_senha = st.text_input("Digite a Nova Senha", type="password")
+            confirmar_senha = st.text_input("Confirme a Nova Senha", type="password")
+            
+            botao_senha = st.form_submit_button("Atualizar Senha", use_container_width=True)
+            
+            if botao_senha:
+                if senha_atual_input != st.session_state['senha_atual']:
+                    st.error("A senha atual digitada está incorreta, abençado!")
+                elif nova_senha == "" or confirmar_senha == "":
+                    st.warning("A nova senha não pode ficar em branco!")
+                elif nova_senha != confirmar_senha:
+                    st.warning("A nova senha e a confirmação não coincidem, varão!")
+                else:
+                    dados_senha = {
+                        "action": "alterarSenha",
+                        "usuario": st.session_state['usuario_atual'],
+                        "nova_senha": nova_senha
+                    }
+                    try:
+                        with st.spinner("Atualizando credenciais na planilha..."):
+                            resposta_senha = requests.post(APPS_SCRIPT_URL, json=dados_senha)
+                            if resposta_senha.status_code == 200:
+                                dados_retorno = resposta_senha.json()
+                                if dados_retorno.get("status") == "sucesso":
+                                    st.success("Glória a Deus! Sua senha foi alterada com sucesso!")
+                                    st.session_state['senha_atual'] = nova_senha # Atualiza na memória do App
+                                else:
+                                    st.error(f"Erro informado pela planilha: {dados_retorno.get('mensagem')}")
+                            else:
+                                st.error("Erro técnico ao processar requisição com a planilha.")
+                    except Exception as e:
+                        st.error(f"Falha na comunicação de dados: {e}")
 
 # 7. ASSINATURA VISUAL EXCLUSIVA NO RODAPÉ DE TODAS AS TELAS
 st.markdown('<div class="footer-comunicando">Desenvolvido por Comunicando Igrejas</div>', unsafe_allow_html=True)
