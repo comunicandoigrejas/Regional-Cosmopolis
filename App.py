@@ -10,13 +10,19 @@ import math
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
 
-# 2. ESTILOS VISUAIS PROTEGIDOS CONTRA TEMA ESCURO (Fontes visíveis em qualquer modo)
+# 2. ESTILOS VISUAIS CUSTOMIZADOS (Fontes escuras, Azul Marinho e Laranja no Hover)
 st.markdown("""
     <style>
-    /* Oculta a barra superior padrão do Streamlit */
-    header { visibility: hidden !important; }
-    footer { visibility: hidden !important; }
-    #MainMenu { visibility: hidden !important; }
+    /* Oculta a barra superior padrão do Streamlit (Share, GitHub, etc.) */
+    header {
+        visibility: hidden !important;
+    }
+    footer {
+        visibility: hidden !important;
+    }
+    #MainMenu {
+        visibility: hidden !important;
+    }
     
     /* Títulos Principais das Páginas */
     h1, h2, h3 {
@@ -46,7 +52,7 @@ st.markdown("""
         box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2) !important;
     }
     
-    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Preto Absoluto para não sumir no Dark Mode) */
+    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Preto Absoluto) */
     div.stButton > button p {
         color: #000000 !important; 
         font-size: 16px !important;
@@ -67,7 +73,7 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* Rodapé fixo na tela */
+    /* Rodapé fixo na tela do aplicativo */
     .footer-comunicando {
         position: fixed;
         left: 0;
@@ -108,20 +114,19 @@ def verificar_login(usuario, senha):
         st.error(f"Erro ao conectar no login: {e}")
     return False
 
-@st.cache_data(ttl=60) # Diminuído o tempo de cache para atualizar mais rápido se você mudar na planilha
+@st.cache_data(ttl=60)
 def buscar_cidades():
     try:
         resposta = requests.get(APPS_SCRIPT_URL, params={"action": "getCidades"})
         if resposta.status_code == 200:
             dados = resposta.json()
             if dados["status"] == "sucesso":
-                # Filtra linhas vazias ou cabeçalhos indesejados se houver
                 lista = [str(linha[0]).strip() for linha in dados["dados"][1:] if len(linha) > 0 and str(linha[0]).strip() != ""]
                 if lista:
                     return lista
     except Exception as e:
         st.error(f"Erro técnico ao buscar cidades: {e}")
-    return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"] # Fallback abençoado baseado no seu print
+    return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"] # Fallback caso a planilha falhe
 
 def buscar_lancamentos():
     try:
@@ -138,7 +143,7 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF
+# 5. GERADOR DE PDF PURIFICADO (Sem a marca do Comunicando Igrejas no rodapé do documento)
 class GeradorPDF(FPDF):
     def header(self):
         caminho_logo = os.path.join("assets", "logo.png")
@@ -151,13 +156,11 @@ class GeradorPDF(FPDF):
         self.ln(15)
 
     def footer(self):
-        self.set_y(-30)
-        self.set_font('helvetica', 'B', 9)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 10, 'Desenvolvido por Comunicando Igrejas', align='C', ln=True)
-        self.set_draw_color(0, 0, 0)
-        self.line(60, self.get_y(), 150, self.get_y()) 
-        self.cell(0, 5, 'Assinatura do Responsável', align='C')
+        # Apenas número de página no rodapé do PDF, de forma neutra
+        self.set_y(-15)
+        self.set_font('helvetica', 'I', 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f'Página {self.page_no()}', align='C')
 
 # 6. GERENCIAMENTO DE ESTADO DA SESSÃO
 if 'logado' not in st.session_state: st.session_state['logado'] = False
@@ -257,7 +260,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade, # CORRIGIDO AQUI (Estava city)
+                        "cidade": cidade,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -424,5 +427,5 @@ else:
                     except Exception as e:
                         st.error(f"Falha na comunicação de dados: {e}")
 
-# 7. ASSINATURA VISUAL EXCLUSIVA NO RODAPÉ DE TODAS AS TELAS
+# 7. ASSINATURA VISUAL EXCLUSIVA NO RODAPÉ DE TODAS AS TELAS DO APLICATIVO
 st.markdown('<div class="footer-comunicando">Desenvolvido por Comunicando Igrejas</div>', unsafe_allow_html=True)
