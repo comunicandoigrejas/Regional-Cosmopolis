@@ -12,7 +12,34 @@ class GeradorPDF(FPDF):
         self.cell(0, 10, 'Relatório Financeiro', align='C', ln=True)
         self.ln(10)
 
+def processar_mudanca_direta(APPS_SCRIPT_URL, df_mes_selecionado, colunas):
+    mudancas = st.session_state["tabela_financeira_direta"].get("edited_rows", {})
+    if mudancas:
+        for indice_linha_str, novos_campos in mudancas.items():
+            indice_linha = int(indice_linha_str)
+            linha_original = df_mes_selecionado.iloc[indice_linha]
+            
+            # Garante que a data seja tratada como string no formato DD/MM/AAAA
+            data_str = novos_campos.get(colunas[1], linha_original[colunas[1]].strftime("%d/%m/%Y"))
+            
+            dados_update = {
+                "action": "editarLancamento",
+                "id_lancamento": str(linha_original[colunas[0]]),
+                "data_lancamento": data_str,
+                "cidade": novos_campos.get(colunas[2], str(linha_original[colunas[2]])),
+                "tipo": novos_campos.get(colunas[3], str(linha_original[colunas[3]])),
+                "descricao": novos_campos.get(colunas[4], str(linha_original[colunas[4]])),
+                "valor": str(novos_campos.get(colunas[5], float(linha_original[colunas[5]]))),
+                "usuario": st.session_state.get('usuario_atual', 'Sistema')
+            }
+            requests.post(APPS_SCRIPT_URL, json=dados_update)
+        st.cache_data.clear()
+
 def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidades):
+    if st.button("⬅️ Voltar ao Menu Principal"):
+        st.session_state['tela_atual'] = "menu"
+        st.rerun()
+
     st.title("📊 Painel Financeiro Regional")
     
     col_a, col_b = st.columns([1, 1])
@@ -26,37 +53,47 @@ def renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidad
     
     dados = buscar_lancamentos()
     if len(dados) > 1:
-        df = pd.DataFrame(dados[1:], columns=dados[0])
-        df[dados[0][1]] = pd.to_datetime(df[dados[0][1]], dayfirst=True, errors='coerce')
-        df_filtro = df[(df[dados[0][1]].dt.month == mapa_meses[mes_escolhido]) & (df[dados[0][1]].dt.year == ano_escolhido)].copy()
+        colunas = dados[0]
+        df = pd.DataFrame(dados[1:], columns=colunas)
+        
+        # Converte para datetime garantindo que não tenha hora
+        df[colunas[1]] = pd.to_datetime(df[colunas[1]], dayfirst=True, errors='coerce').dt.date
+        df[colunas[5]] = pd.to_numeric(df[colunas[5]], errors='coerce').fillna(0)
+        
+        # Filtro pelo mês e ano selecionados
+        df_filtro = df[(pd.to_datetime(df[colunas[1]]).dt.month == mapa_meses[mes_escolhido]) & 
+                       (pd.to_datetime(df[colunas[1]]).dt.year == ano_escolhido)].copy()
         
         if df_filtro.empty:
             st.warning("Nenhum lançamento encontrado neste período.")
             return
 
-        st.dataframe(df_filtro, use_container_width=True)
+        # Prepara para exibição como string formatada DD/MM/AAAA
+        df_exibicao = df_filtro.copy()
+        df_exibicao[colunas[1]] = df_exibicao[colunas[1]].apply(lambda x: x.strftime('%d/%m/%Y'))
 
-        # GERAÇÃO SEGURA DO PDF
+        st.data_editor(
+            df_exibicao, 
+            key="tabela_financeira_direta", 
+            on_change=processar_mudanca_direta, 
+            args=(APPS_SCRIPT_URL, df_filtro, colunas),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # GERAÇÃO DO PDF
         pdf = GeradorPDF()
         pdf.add_page()
         pdf.set_font("helvetica", "", 12)
         pdf.cell(0, 10, f"Fechamento: {mes_escolhido}/{ano_escolhido}", ln=True)
         
-        # O método output() da fpdf2 retorna os bytes diretamente.
-        # Não usamos 'dest' nem 'encode', apenas o output() puro.
         pdf_conteudo = pdf.output()
         
-        # Forçamos a conversão para garantir que é um objeto de bytes do Python
-        # Se for um objeto da classe fpdf.output.Output, pegamos seus bytes.
-        try:
-            if hasattr(pdf_conteudo, "getvalue"): # Caso seja um buffer
-                pdf_bytes = pdf_conteudo.getvalue()
-            elif isinstance(pdf_conteudo, bytes): # Caso já sejam bytes
-                pdf_bytes = pdf_conteudo
-            else: # Caso seja uma string ou outro tipo
-                pdf_bytes = str(pdf_conteudo).encode('latin-1')
-        except:
-            pdf_bytes = b""
+        # Garante o formato de bytes para download
+        if isinstance(pdf_conteudo, str):
+            pdf_bytes = pdf_conteudo.encode('latin-1')
+        else:
+            pdf_bytes = pdf_conteudo
 
         st.download_button(
             label="📥 Baixar PDF deste período",
