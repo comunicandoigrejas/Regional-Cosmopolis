@@ -33,7 +33,7 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
-    /* Botões de Ação do Sistema (Verde Oliva) */
+    /* Botões de Ação do Sistema */
     div.stButton > button {
         border-radius: 8px;
         font-weight: bold;
@@ -140,7 +140,7 @@ if 'logado' not in st.session_state:
 if 'usuario_atual' not in st.session_state:
     st.session_state['usuario_atual'] = ""
 if 'tela_atual' not in st.session_state:
-    st.session_state['tela_atual'] = "menu" # Controla qual janela está ativa por botões
+    st.session_state['tela_atual'] = "menu"
 
 # ==========================================
 # TELA 1: LOGIN DO SISTEMA
@@ -148,7 +148,6 @@ if 'tela_atual' not in st.session_state:
 if not st.session_state['logado']:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.ln(5)
         st.title("🕊️ Financeiro Regional")
         st.write("A paz do Senhor! Faça seu login.")
         
@@ -172,7 +171,6 @@ else:
     if st.session_state['tela_atual'] == "menu":
         st.title("🕊️ Painel de Controle - Regional Cosmópolis")
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
-        st.ln(2)
         
         # Cria duas colunas largas para colocar os botões lado a lado no centro
         col_btn1, col_btn2 = st.columns(2)
@@ -189,7 +187,6 @@ else:
                 st.session_state['tela_atual'] = "relatorios"
                 st.rerun()
         
-        st.ln(4)
         # Botão de Sair posicionado de forma limpa na base do menu
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
@@ -226,10 +223,11 @@ else:
                 if descricao == "" or valor == 0:
                     st.warning("Varão, a descrição e o valor não podem ficar vazios!")
                 else:
+                    # LINHA 232 CORRIGIDA: Removido o 'city :=' que gerava o erro!
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": city := cidade,
+                        "cidade": cidade,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -288,7 +286,7 @@ else:
                     else:
                         entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
                         saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
-                        saldo = entries_sub_expenses := entradas - saidas
+                        saldo = entradas - saidas
                         
                         st.markdown("### Resumo do Período")
                         c1, c2, c3 = st.columns(3)
