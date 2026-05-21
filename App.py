@@ -1,41 +1,31 @@
 import streamlit as st
 import requests
-import pandas as pd
-from datetime import datetime
-from fpdf import FPDF
-import io
-import os
-import math
 
-# 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
+# IMPORTAÇÃO DAS TELAS MODULARES DA PASTA JANELAS
+from janelas.lancamentos import renderizar_tela_lancamentos
+from janelas.relatorios import renderizar_tela_relatorios
+from janelas.alterar_senha import renderizar_tela_senha
+
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🏛️", layout="wide")
 
-# 2. ESTILOS VISUAIS CUSTOMIZADOS (Fontes escuras, Azul Marinho e Laranja no Hover)
+# 2. ESTILOS VISUAIS CUSTOMIZADOS PROTEGIDOS CONTRA DARK MODE
 st.markdown("""
     <style>
-    /* Oculta a barra superior padrão do Streamlit (Share, GitHub, etc.) */
-    header {
-        visibility: hidden !important;
-    }
-    footer {
-        visibility: hidden !important;
-    }
-    #MainMenu {
-        visibility: hidden !important;
-    }
+    header { visibility: hidden !important; }
+    footer { visibility: hidden !important; }
+    #MainMenu { visibility: hidden !important; }
     
-    /* Títulos Principais das Páginas */
     h1, h2, h3 {
-        color: #000080 !important; /* Azul Marinho Forçado */
+        color: #000080 !important;
         font-weight: bold !important;
     }
 
-    /* Estilização dos Botões de Menu (Transformando em Cards Grandes) */
     div.stButton > button {
         border-radius: 12px !important;
         padding: 30px 20px !important;
-        background-color: #f0f2f6 !important; /* Fundo cinza claro estável */
-        border: 2px solid #2b1b54 !important; /* Borda fina */
+        background-color: #f0f2f6 !important;
+        border: 2px solid #2b1b54 !important;
         transition: all 0.3s ease !important;
         height: auto !important;
         min-height: 160px !important;
@@ -45,14 +35,12 @@ st.markdown("""
         justify-content: center !important;
     }
     
-    /* Efeito ao passar o mouse por cima do Card (Muda para Laranja) */
     div.stButton > button:hover {
         background-color: #ff8c00 !important; 
         border-color: #ff8c00 !important;
         box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2) !important;
     }
     
-    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Preto Absoluto) */
     div.stButton > button p {
         color: #000000 !important; 
         font-size: 16px !important;
@@ -60,20 +48,17 @@ st.markdown("""
         white-space: pre-line !important;
     }
     
-    /* Título interno em negrito dentro do Card */
     div.stButton > button p strong {
-        color: #000080 !important; /* Azul Marinho */
+        color: #000080 !important;
         font-size: 21px !important;
         display: block !important;
         margin-bottom: 6px !important;
     }
     
-    /* Inverte todas as fontes internas para Branco apenas no Hover */
     div.stButton > button:hover p, div.stButton > button:hover p strong {
         color: #ffffff !important;
     }
 
-    /* Rodapé fixo na tela do aplicativo */
     .footer-comunicando {
         position: fixed;
         left: 0;
@@ -91,14 +76,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. PUXANDO A URL DA PLANILHA
+# 3. CREDENCIAIS SECRETS
 try:
     APPS_SCRIPT_URL = st.secrets["APPS_SCRIPT_URL"]
 except KeyError:
-    st.error("Varão, o arquivo secrets.toml não foi encontrado ou a URL está faltando. Verifique as configurações!")
+    st.error("Varão, URL do Apps Script não configurada nas secrets.")
     st.stop()
 
-# 4. FUNÇÕES DE COMUNICAÇÃO COM O GOOGLE SHEETS
+# 4. FUNÇÕES GLOBAIS DE CONEXÃO COM A PLANILHA
 def verificar_login(usuario, senha):
     try:
         resposta = requests.get(APPS_SCRIPT_URL, params={"action": "getUsuarios"})
@@ -122,10 +107,9 @@ def buscar_cidades():
             dados = resposta.json()
             if dados["status"] == "sucesso":
                 lista = [str(linha[0]).strip() for linha in dados["dados"][1:] if len(linha) > 0 and str(linha[0]).strip() != ""]
-                if lista:
-                    return lista
+                if lista: return lista
     except Exception as e:
-        st.error(f"Erro técnico ao buscar cidades: {e}")
+        pass
     return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"]
 
 def buscar_lancamentos():
@@ -133,80 +117,24 @@ def buscar_lancamentos():
         resposta = requests.get(APPS_SCRIPT_URL, params={"action": "getLancamentos"})
         if resposta.status_code == 200:
             dados = resposta.json()
-            if dados["status"] == "sucesso":
-                return dados["dados"]
-            else:
-                st.error(f"Aviso do Google Sheets: {dados.get('mensagem', 'Sem mensagem de erro detalhada')}")
-        else:
-            st.error(f"Erro de resposta do servidor da planilha: Código {resposta.status_code}")
+            if dados["status"] == "sucesso": return dados["dados"]
     except Exception as e:
-        st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
+        st.error(f"Falha de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF INTELIGENTE COM DATA E ASSINATURA DINÂMICA
-class GeradorPDF(FPDF):
-    def __init__(self, usuario_logado, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.usuario_logado = str(usuario_logado).strip().lower()
-
-    def header(self):
-        caminho_logo = os.path.join("assets", "logo.png")
-        if os.path.exists(caminho_logo):
-            self.image(caminho_logo, x=10, y=8, w=30)
-            self.set_x(45)
-        self.set_font('helvetica', 'B', 16)
-        self.set_text_color(43, 27, 84) 
-        self.cell(0, 10, 'Relatório Financeiro - Regional Cosmópolis', align='C', ln=True)
-        self.ln(15)
-
-    def footer(self):
-        # Posiciona o rodapé bem estruturado na parte inferior da última página
-        self.set_y(-40)
-        
-        # 1. Linha com a Data de Exportação
-        self.set_font('helvetica', '', 10)
-        self.set_text_color(0, 0, 0)
-        data_hoje = datetime.now().strftime("%d/%m/%Y")
-        self.cell(0, 10, f"Cosmópolis {data_hoje}", align='C', ln=True)
-        self.ln(5)
-        
-        # 2. Define o nome do responsável com base no perfil logado
-        if "pastora" in self.usuario_logado:
-            nome_assinatura = "Pastora Fátima Leal"
-        elif "pastor" in self.usuario_logado:
-            nome_assinatura = "Pastor Marcelo Alves de Souza"
-        else:
-            nome_assinatura = "Responsável Regional"
-            
-        # 3. Desenha a linha e coloca o nome correto abaixo dela
-        self.set_draw_color(0, 0, 0)
-        self.line(60, self.get_y(), 150, self.get_y()) # Linha centralizada para assinatura
-        
-        self.set_font('helvetica', 'B', 10)
-        self.cell(0, 5, nome_assinatura, align='C', ln=True)
-        
-        # Número de página discreto bem abaixo
-        self.set_y(-12)
-        self.set_font('helvetica', 'I', 8)
-        self.set_text_color(128, 128, 128)
-        self.cell(0, 10, f'Página {self.page_no()}', align='C')
-
-# 6. GERENCIAMENTO DE ESTADO DA SESSÃO
+# 5. GERENCIAMENTO DE ESTADO DA SESSÃO
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'usuario_atual' not in st.session_state: st.session_state['usuario_atual'] = ""
 if 'senha_atual' not in st.session_state: st.session_state['senha_atual'] = ""
 if 'tela_atual' not in st.session_state: st.session_state['tela_atual'] = "menu"
 
-# ==========================================
-# TELA 1: LOGIN DO SISTEMA
-# ==========================================
+# TELA DE LOGIN
 if not st.session_state['logado']:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.write("")
         st.title("🏛️ Financeiro Regional")
         st.write("A paz do Senhor! Faça seu login.")
-        
         usuario_input = st.text_input("Usuário")
         senha_input = st.text_input("Senha", type="password")
         
@@ -220,33 +148,24 @@ if not st.session_state['logado']:
             else:
                 st.error("Usuário ou senha incorretos, varão. Tente novamente!")
 
-# ==========================================
-# TELA 2: SISTEMA LOGADO
-# ==========================================
+# SISTEMA LOGADO - GERENCIADOR DE ROTAS
 else:
-    # --- JANELA: MENU PRINCIPAL DE BOTÕES CARD ---
     if st.session_state['tela_atual'] == "menu":
         st.title("🏛️ Painel de Controle")
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**!")
         st.write("")
         
         col_card1, col_card2, col_card3 = st.columns(3)
-        
         with col_card1:
-            texto_card1 = "**🏛️ Registrar Movimentações**\nInsira novas entradas e saídas de dízimos, ofertas ou despesas."
-            if st.button(texto_card1, use_container_width=True, key="card_lancamentos"):
+            if st.button("**🏛️ Registrar Movimentações**\nInsira novas entradas e saídas de dízimos, ofertas ou despesas.", use_container_width=True):
                 st.session_state['tela_atual'] = "lancamentos"
                 st.rerun()
-                
         with col_card2:
-            texto_card2 = "**📊 Relatórios Financeiros**\nConsulte registros, analise saldos e exporte o fechamento em PDF."
-            if st.button(texto_card2, use_container_width=True, key="card_relatorios"):
+            if st.button("**📊 Consultar e Modificar**\nVeja os lançamentos do mês atual, corrija erros, exclua ou emita o PDF.", use_container_width=True):
                 st.session_state['tela_atual'] = "relatorios"
                 st.rerun()
-
         with col_card3:
-            texto_card3 = "**🔑 Alterar Minha Senha**\nMude sua senha padrão de acesso para garantir mais segurança."
-            if st.button(texto_card3, use_container_width=True, key="card_senha"):
+            if st.button("**🔑 Alterar Minha Senha**\nMude sua senha padrão de acesso para garantir mais segurança.", use_container_width=True):
                 st.session_state['tela_atual'] = "alterar_senha"
                 st.rerun()
         
@@ -258,203 +177,15 @@ else:
             st.session_state['tela_atual'] = "menu"
             st.rerun()
 
-    # --- JANELA: FORMULÁRIO DE LANÇAMENTOS ---
+    # DIRECIONAMENTO PARA AS JANELAS SEPARADAS
     elif st.session_state['tela_atual'] == "lancamentos":
-        col_nav1, col_nav2 = st.columns([6, 2])
-        with col_nav1:
-            st.title("📝 Registrar Movimentação")
-        with col_nav2:
-            if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
-                st.session_state['tela_atual'] = "menu"
-                st.rerun()
-                
-        cidades_lista = buscar_cidades()
+        renderizar_tela_lancamentos(APPS_SCRIPT_URL, buscar_cidades)
         
-        with st.form("form_lancamentos", clear_on_submit=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                data_lancamento = st.date_input("Data do Lançamento", format="DD/MM/YYYY")
-                tipo = st.selectbox("Tipo", ["Entrada (Dízimos, Ofertas)", "Saída (Despesas, Pagamentos)"])
-            with col2:
-                cidade = st.selectbox("Igreja/Cidade", cidades_lista)
-                valor = st.number_input("Valor (R$)", min_value=0.0, format="%.2f")
-            
-            descricao = st.text_input("Descrição (Ex: Conta de Luz, Oferta Culto de Domingo)")
-            botao_salvar = st.form_submit_button("Gravar na Planilha", use_container_width=True)
-            
-            if botao_salvar:
-                if descricao == "" or valor == 0:
-                    st.warning("Varão, a descrição e o valor não podem ficar vazios!")
-                else:
-                    dados_envio = {
-                        "action": "registrarLancamento",
-                        "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": city,
-                        "tipo": "Entrada" if "Entrada" in tipo else "Saída",
-                        "descricao": descricao,
-                        "valor": valor,
-                        "usuario": st.session_state['usuario_atual']
-                    }
-                    try:
-                        resposta_post = requests.post(APPS_SCRIPT_URL, json=dados_envio)
-                        if resposta_post.status_code == 200:
-                            st.success(f"Aleluia! Lançamento registrado com sucesso por {st.session_state['usuario_atual']}!")
-                        else:
-                            st.error(f"Erro ao gravar na planilha. Código: {resposta_post.status_code}")
-                    except Exception as e:
-                        st.error(f"Erro de conexão no envio: {e}")
-
-    # --- JANELA: CONSULTA E EXPORTAÇÃO DE RELATÓRIOS ---
     elif st.session_state['tela_atual'] == "relatorios":
-        col_nav1, col_nav2 = st.columns([6, 2])
-        with col_nav1:
-            st.title("📊 Relatórios e Exportação")
-        with col_nav2:
-            if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
-                st.session_state['tela_atual'] = "menu"
-                st.rerun()
-                
-        col1, col2 = st.columns(2)
-        with col1:
-            data_inicio = st.date_input("Data Inicial", format="DD/MM/YYYY")
-        with col2:
-            data_fim = st.date_input("Data Final", format="DD/MM/YYYY")
-            
-        if st.button("Buscar Dados da Planilha", use_container_width=True):
-            with st.spinner("Buscando dados na planilha..."):
-                dados = buscar_lancamentos()
-                
-                if len(dados) > 1:
-                    colunas = dados[0]
-                    valores = dados[1:]
-                    df = pd.DataFrame(valores, columns=colunas)
-                    
-                    nome_col_data = colunas[1]
-                    nome_col_valor = colunas[5]
-                    nome_col_tipo = colunas[3]
-                    
-                    df[nome_col_data] = pd.to_datetime(df[nome_col_data], errors='coerce', dayfirst=True, utc=True).dt.tz_localize(None)
-                    df[nome_col_valor] = pd.to_numeric(df[nome_col_valor], errors='coerce').fillna(0)
-                    
-                    data_inicio_pd = pd.to_datetime(data_inicio)
-                    data_fim_pd = pd.to_datetime(data_fim)
-                    mask = (df[nome_col_data] >= data_inicio_pd) & (df[nome_col_data] <= data_fim_pd)
-                    
-                    df_filtrado = df.loc[mask].copy()
-                    
-                    if df_filtrado.empty:
-                        st.warning("Nenhum lançamento encontrado neste período selecionado.")
-                    else:
-                        entradas = df_filtrado[df_filtrado[nome_col_tipo] == 'Entrada'][nome_col_valor].sum()
-                        saidas = df_filtrado[df_filtrado[nome_col_tipo] == 'Saída'][nome_col_valor].sum()
-                        saldo = entradas - saidas
-                        
-                        st.markdown("### Resumo do Período")
-                        c1, c2, c3 = st.columns(3)
-                        c1.success(f"Entradas: R$ {entradas:.2f}")
-                        c2.error(f"Saídas: R$ {saidas:.2f}")
-                        c3.info(f"Saldo: R$ {saldo:.2f}")
-                        
-                        df_exibicao = df_filtrado.copy()
-                        df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
-                        st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
-                        
-                        # PASSA O USUÁRIO ATUAL LOGADO PARA COLETAR O NOME CORRETO DA ASSINATURA
-                        pdf = GeradorPDF(usuario_logado=st.session_state['usuario_atual'])
-                        pdf.add_page()
-                        pdf.set_font("helvetica", "B", 11)
-                        pdf.cell(0, 10, f"Período: {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", ln=True)
-                        pdf.ln(5)
-                        
-                        larguras = [23, 32, 85, 25, 25] 
-                        pdf.set_fill_color(200, 220, 255)
-                        pdf.cell(larguras[0], 10, "Data", border=1, fill=True)
-                        pdf.cell(larguras[1], 10, "Cidade", border=1, fill=True)
-                        pdf.cell(larguras[2], 10, "Descrição", border=1, fill=True)
-                        pdf.cell(larguras[3], 10, "Tipo", border=1, fill=True)
-                        pdf.cell(larguras[4], 10, "Valor", border=1, fill=True, ln=True)
-                        
-                        pdf.set_font("helvetica", "", 9)
-                        altura_base_texto = 6
-                        
-                        for index, row in df_exibicao.iterrows():
-                            texto_desc = str(row[colunas[4]])
-                            largura_real_texto = pdf.get_string_width(texto_desc)
-                            num_linhas = math.ceil(largura_real_texto / (larguras[2] - 3))
-                            if num_linhas < 1: num_linhas = 1
-                            
-                            altura_da_linha_final = num_linhas * altura_base_texto
-                            y_topo = pdf.get_y()
-                            
-                            pdf.cell(larguras[0], altura_da_linha_final, str(row[colunas[1]]), border=1)
-                            pdf.cell(larguras[1], altura_da_linha_final, str(row[colunas[2]])[:15], border=1)
-                            x_pos_desc = pdf.get_x()
-                            
-                            pdf.multi_cell(larguras[2], altura_base_texto, texto_desc, border=1)
-                            pdf.set_xy(x_pos_desc + larguras[2], y_topo)
-                            
-                            pdf.cell(larguras[3], altura_da_linha_final, str(row[colunas[3]]), border=1)
-                            pdf.cell(larguras[4], altura_da_linha_final, f"R$ {row[colunas[5]]:.2f}", border=1)
-                            pdf.set_xy(10, y_topo + altura_da_linha_final)
-                        
-                        pdf_bytes = bytes(pdf.output())
-                        st.write("")
-                        st.download_button(
-                            label="📥 Exportar Relatório Completo em PDF",
-                            data=pdf_bytes,
-                            file_name=f"Relatorio_{data_inicio}_a_{data_fim}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                else:
-                    st.info("A planilha retornou vazia para o período selecionado.")
-
-    # --- JANELA: ALTERAÇÃO DE SENHA ---
+        renderizar_tela_relatorios(APPS_SCRIPT_URL, buscar_lancamentos, buscar_cidades)
+        
     elif st.session_state['tela_atual'] == "alterar_senha":
-        col_nav1, col_nav2 = st.columns([6, 2])
-        with col_nav1:
-            st.title("🔑 Alterar Credenciais")
-        with col_nav2:
-            if st.button("⬅️ Voltar ao Menu Principal", use_container_width=True):
-                st.session_state['tela_atual'] = "menu"
-                st.rerun()
-                
-        with st.form("form_mudar_senha", clear_on_submit=True):
-            st.write(f"Preencha os campos abaixo para atualizar a segurança do usuário: **{st.session_state['usuario_atual']}**")
-            
-            senha_atual_input = st.text_input("Digite sua Senha Atual", type="password")
-            nova_senha = st.text_input("Digite a Nova Senha", type="password")
-            confirmar_senha = st.text_input("Confirme a Nova Senha", type="password")
-            
-            botao_senha = st.form_submit_button("Atualizar Senha", use_container_width=True)
-            
-            if botao_senha:
-                if senha_atual_input != st.session_state['senha_atual']:
-                    st.error("A senha atual digitada está incorreta, abençoado!")
-                elif nova_senha == "" or confirmar_senha == "":
-                    st.warning("A nova senha não pode ficar em branco!")
-                elif nova_senha != confirmar_senha:
-                    st.warning("A nova senha e a confirmação não coincidem, varão!")
-                else:
-                    dados_senha = {
-                        "action": "alterarSenha",
-                        "usuario": st.session_state['usuario_atual'],
-                        "nova_senha": nova_senha
-                    }
-                    try:
-                        with st.spinner("Atualizando credenciais na planilha..."):
-                            resposta_senha = requests.post(APPS_SCRIPT_URL, json=dados_senha)
-                            if resposta_senha.status_code == 200:
-                                dados_retorno = resposta_senha.json()
-                                if dados_retorno.get("status") == "sucesso":
-                                    st.success("Glória a Deus! Sua senha foi alterada com sucesso!")
-                                    st.session_state['senha_atual'] = nova_senha 
-                                else:
-                                    st.error(f"Erro informado pela planilha: {dados_retorno.get('mensagem')}")
-                            else:
-                                st.error("Erro técnico ao processar requisição com a planilha.")
-                    except Exception as e:
-                        st.error(f"Falha na comunicação de dados: {e}")
+        renderizar_tela_senha(APPS_SCRIPT_URL)
 
-# 7. ASSINATURA VISUAL EXCLUSIVA NO RODAPÉ DE TODAS AS TELAS DO APLICATIVO
+# RODAPÉ DE ASSINATURA DO APP
 st.markdown('<div class="footer-comunicando">Desenvolvido por Comunicando Igrejas</div>', unsafe_allow_html=True)
