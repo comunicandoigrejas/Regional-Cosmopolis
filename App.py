@@ -126,7 +126,7 @@ def buscar_cidades():
                     return lista
     except Exception as e:
         st.error(f"Erro técnico ao buscar cidades: {e}")
-    return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"] # Fallback caso a planilha falhe
+    return ["Limeira", "Cosmópolis", "Capivari", "Conchal", "Leme", "Campinas", "Valinhos"]
 
 def buscar_lancamentos():
     try:
@@ -143,8 +143,12 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF PURIFICADO (Sem a marca do Comunicando Igrejas no rodapé do documento)
+# 5. GERADOR DE PDF INTELIGENTE COM DATA E ASSINATURA DINÂMICA
 class GeradorPDF(FPDF):
+    def __init__(self, usuario_logado, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.usuario_logado = str(usuario_logado).strip().lower()
+
     def header(self):
         caminho_logo = os.path.join("assets", "logo.png")
         if os.path.exists(caminho_logo):
@@ -156,8 +160,33 @@ class GeradorPDF(FPDF):
         self.ln(15)
 
     def footer(self):
-        # Apenas número de página no rodapé do PDF, de forma neutra
-        self.set_y(-15)
+        # Posiciona o rodapé bem estruturado na parte inferior da última página
+        self.set_y(-40)
+        
+        # 1. Linha com a Data de Exportação
+        self.set_font('helvetica', '', 10)
+        self.set_text_color(0, 0, 0)
+        data_hoje = datetime.now().strftime("%d/%m/%Y")
+        self.cell(0, 10, f"Cosmópolis {data_hoje}", align='C', ln=True)
+        self.ln(5)
+        
+        # 2. Define o nome do responsável com base no perfil logado
+        if "pastora" in self.usuario_logado:
+            nome_assinatura = "Pastora Fátima Leal"
+        elif "pastor" in self.usuario_logado:
+            nome_assinatura = "Pastor Marcelo Alves de Souza"
+        else:
+            nome_assinatura = "Responsável Regional"
+            
+        # 3. Desenha a linha e coloca o nome correto abaixo dela
+        self.set_draw_color(0, 0, 0)
+        self.line(60, self.get_y(), 150, self.get_y()) # Linha centralizada para assinatura
+        
+        self.set_font('helvetica', 'B', 10)
+        self.cell(0, 5, nome_assinatura, align='C', ln=True)
+        
+        # Número de página discreto bem abaixo
+        self.set_y(-12)
         self.set_font('helvetica', 'I', 8)
         self.set_text_color(128, 128, 128)
         self.cell(0, 10, f'Página {self.page_no()}', align='C')
@@ -260,7 +289,7 @@ else:
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
-                        "cidade": cidade,
+                        "cidade": city,
                         "tipo": "Entrada" if "Entrada" in tipo else "Saída",
                         "descricao": descricao,
                         "valor": valor,
@@ -330,8 +359,8 @@ else:
                         df_exibicao[nome_col_data] = df_exibicao[nome_col_data].dt.strftime('%d/%m/%Y')
                         st.dataframe(df_exibicao[[colunas[1], colunas[2], colunas[3], colunas[4], colunas[5]]], use_container_width=True)
                         
-                        # PDF GENERATOR
-                        pdf = GeradorPDF()
+                        # PASSA O USUÁRIO ATUAL LOGADO PARA COLETAR O NOME CORRETO DA ASSINATURA
+                        pdf = GeradorPDF(usuario_logado=st.session_state['usuario_atual'])
                         pdf.add_page()
                         pdf.set_font("helvetica", "B", 11)
                         pdf.cell(0, 10, f"Período: {data_inicio.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')}", ln=True)
