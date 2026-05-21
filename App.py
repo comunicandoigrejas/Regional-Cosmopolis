@@ -5,6 +5,7 @@ from datetime import datetime
 from fpdf import FPDF
 import io
 import os
+import math
 
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🕊️", layout="wide")
@@ -255,6 +256,7 @@ else:
                         pdf.cell(0, 10, f"Entradas: R$ {entradas:.2f} | Saídas: R$ {saidas:.2f} | Saldo: R$ {saldo:.2f}", ln=True)
                         pdf.ln(5)
                         
+                        # Cabeçalho da Tabela
                         pdf.set_fill_color(200, 220, 255)
                         pdf.set_font("helvetica", "B", 10)
                         pdf.cell(23, 10, "Data", border=1, fill=True)
@@ -263,34 +265,45 @@ else:
                         pdf.cell(25, 10, "Tipo", border=1, fill=True)
                         pdf.cell(25, 10, "Valor", border=1, fill=True, ln=True)
                         
+                        # Linhas da tabela com cálculo dinâmico de altura
                         pdf.set_font("helvetica", "", 9)
+                        largura_desc = 85
+                        altura_base_linha = 7 # Altura de uma linha de texto simples
+                        
                         for index, row in df_exibicao.iterrows():
-                            # Guardamos a posição Y atual antes de começar a linha para podermos alinhar as colunas seguintes
-                            posicao_y_inicial = pdf.get_y()
+                            texto_desc = str(row[colunas[4]])
                             
-                            # Colunas normais (Data e Cidade)
-                            pdf.cell(23, 8, str(row[colunas[1]]), border=1)
-                            pdf.cell(32, 8, str(row[colunas[2]])[:15], border=1)
+                            # Calcula quantas linhas a descrição vai precisar ocupar dentro dos 85mm de largura
+                            largura_texto = pdf.get_string_width(texto_desc)
+                            num_linhas = math.ceil(largura_texto / (largura_desc - 3)) # margem de segurança de 3mm
+                            if num_linhas < 1:
+                                num_linhas = 1
+                                
+                            # Força a altura de TODAS as colunas a se ajustarem pelo tamanho da descrição
+                            altura_da_linha_calculada = num_linhas * altura_base_linha
                             
-                            # Guardamos a posição X atual para desenhar a descrição exatamente aqui
-                            posicao_x_descricao = pdf.get_x()
+                            # Guarda o Y antes de iniciar a linha
+                            y_inicial = pdf.get_y()
                             
-                            # Imprime a Descrição usando multi_cell para fazer a quebra de linha automática (largura 85)
-                            pdf.multi_cell(85, 8, str(row[colunas[4]]), border=1)
+                            # Desenha as colunas iniciais com a nova altura unificada
+                            pdf.cell(23, altura_da_linha_calculada, str(row[colunas[1]]), border=1)
+                            pdf.cell(32, altura_da_linha_calculada, str(row[colunas[2]])[:15], border=1)
                             
-                            # Descobrimos até onde a descrição foi (Y final) para sabermos a altura real da linha
-                            posicao_y_final = pdf.get_y()
-                            altura_linha = posicao_y_final - posicao_y_inicial
+                            # Posição X exata antes de aplicar o multi_cell na descrição
+                            x_desc = pdf.get_x()
                             
-                            # Voltamos o cursor para o topo desta linha e pulamos o X da descrição para desenhar Tipo e Valor
-                            pdf.set_xy(posicao_x_descricao + 85, posicao_y_inicial)
+                            # O multi_cell faz a mágica de quebrar o texto nativamente
+                            pdf.multi_cell(largura_desc, altura_base_linha, texto_desc, border=1)
                             
-                            # Imprime Tipo e Valor alinhados com a altura corrigida
-                            pdf.cell(25, altura_linha, str(row[colunas[3]]), border=1)
-                            pdf.cell(25, altura_linha, f"R$ {row[colunas[5]]:.2f}", border=1)
+                            # Move o cursor para o topo direito da descrição para fazer o restante das colunas
+                            pdf.set_xy(x_desc + largura_desc, y_inicial)
                             
-                            # Define o cursor definitivamente para a próxima linha da tabela
-                            pdf.set_xy(10, posicao_y_final)
+                            # Desenha as colunas finais com a mesma altura calculada
+                            pdf.cell(25, altura_da_linha_calculada, str(row[colunas[3]]), border=1)
+                            pdf.cell(25, altura_da_linha_calculada, f"R$ {row[colunas[5]]:.2f}", border=1)
+                            
+                            # Move o cursor definitivamente para a base da linha atual para começar a próxima registro na tabela
+                            pdf.set_xy(10, y_inicial + altura_da_linha_calculada)
                         
                         pdf_bytes = bytes(pdf.output())
                         
