@@ -10,10 +10,10 @@ import math
 # 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA LINHA!)
 st.set_page_config(page_title="Finanças Regional Cosmópolis", page_icon="🕊️", layout="wide")
 
-# 2. ESTILOS VISUAIS E OCULTAÇÃO DA BARRA SUPERIOR (GITHUB/SHARE)
+# 2. ESTILOS VISUAIS CUSTOMIZADOS (Cores solicitadas e fontes escuras)
 st.markdown("""
     <style>
-    /* Oculta o cabeçalho padrão do Streamlit (Botões GitHub, Share, Menu) */
+    /* Oculta a barra superior padrão do Streamlit (Share, GitHub, etc.) */
     header {
         visibility: hidden !important;
     }
@@ -24,26 +24,53 @@ st.markdown("""
         visibility: hidden !important;
     }
     
-    /* Customização dos Quadros do Menu Principal */
-    .menu-box {
-        text-align: center;
-        padding: 20px;
-        border-radius: 10px;
-        background-color: #f0f2f6;
-        margin-bottom: 10px;
-    }
-    
-    /* Botões de Ação do Sistema */
-    div.stButton > button {
-        border-radius: 8px;
+    /* Títulos Principais das Páginas */
+    h1, h2, h3 {
+        color: #000080; /* Azul Marinho */
         font-weight: bold;
     }
-    
-    /* Títulos em Azul Marinho */
-    h1, h2, h3 {
-        color: #000080;
+
+    /* Estilização dos Botões de Menu (Transformando em Cards Grandes) */
+    div.stButton > button {
+        border-radius: 12px !important;
+        padding: 30px 20px !important;
+        background-color: #f0f2f6 !important; /* Fundo cinza claro idêntico ao anterior */
+        border: 2px solid #2b1b54 !important; /* Borda fina em tom Roxo/Azul */
+        transition: all 0.3s ease;
+        height: auto !important;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
     }
     
+    /* Efeito ao passar o mouse por cima do Card */
+    div.stButton > button:hover {
+        background-color: #ff8c00 !important; /* Laranja quando passa o mouse */
+        border-color: #ff8c00 !important;
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Ajuste do Texto do Card quando o mouse NÃO está por cima (Fonte Escura) */
+    div.stButton > button p {
+        color: #1e1e1e !important; /* Cor cinza bem escura/preta para leitura perfeita */
+        font-size: 16px !important;
+    }
+    
+    /* Garante que o título dentro do Card fique maior e em negrito */
+    div.stButton > button p strong {
+        color: #000080 !important; /* Título do card em Azul Marinho */
+        font-size: 22px !important;
+        display: block;
+        margin-bottom: 8px;
+    }
+    
+    /* Inverte as cores do texto para Branco quando o mouse passa por cima do Card (Hover) */
+    div.stButton > button:hover p, div.stButton > button:hover p strong {
+        color: #ffffff !important;
+    }
+
     /* Rodapé fixo na tela */
     .footer-comunicando {
         position: fixed;
@@ -112,7 +139,7 @@ def buscar_lancamentos():
         st.error(f"Falha crítica de conexão ao buscar os lançamentos: {e}")
     return []
 
-# 5. GERADOR DE PDF COM TODAS AS COLUNAS CONTROLADAS E LOGO
+# 5. GERADOR DE PDF ABENÇOADO COM GRID COMPLETO
 class GeradorPDF(FPDF):
     def header(self):
         caminho_logo = os.path.join("assets", "logo.png")
@@ -174,28 +201,26 @@ else:
         st.write(f"Bem-vindo, abençoado(a) **{st.session_state['usuario_atual']}**! Escolha a operação desejada:")
         st.write("")
         
-        # Cria duas colunas largas para colocar os blocos lado a lado no centro
-        col_btn1, col_btn2 = st.columns(2)
+        # Criamos duas colunas largas para colocar os dois Cards lado a lado
+        col_card1, col_card2 = st.columns(2)
         
-        with col_btn1:
-            # Quadro com Nome e Descrição da primeira opção
-            st.markdown('<div class="menu-box"><h3>Registrar Movimentações</h3><p>Insira novas entradas e saídas de dízimos, ofertas ou despesas.</p></div>', unsafe_allow_html=True)
-            # O botão inserido exatamente em seguida, acoplado ao quadro maior
-            if st.button("📝 Acessar Registrar Lançamentos", use_container_width=True, key="btn_lancamentos"):
+        with col_card1:
+            # O texto formatado com tags HTML vai diretamente para o parâmetro do botão.
+            # O CSS que colocamos lá em cima cuida de deixar a fonte escura e quebrar a linha.
+            texto_card1 = "**📝 Registrar Movimentações**\n\nInsira novas entradas e saídas de dízimos, ofertas ou despesas."
+            if st.button(texto_card1, use_container_width=True, key="card_lancamentos"):
                 st.session_state['tela_atual'] = "lancamentos"
                 st.rerun()
                 
-        with col_btn2:
-            # Quadro com Nome e Descrição da segunda opção
-            st.markdown('<div class="menu-box"><h3>Relatórios Financeiros</h3><p>Consulte registros, analise saldos e exporte o fechamento em PDF.</p></div>', unsafe_allow_html=True)
-            # O botão inserido exatamente em seguida, acoplado ao quadro maior
-            if st.button("📊 Acessar Gerar Relatórios", use_container_width=True, key="btn_relatorios"):
+        with col_card2:
+            texto_card2 = "**📊 Relatórios Financeiros**\n\nConsulte registros, analise saldos e exporte o fechamento em PDF."
+            if st.button(texto_card2, use_container_width=True, key="card_relatorios"):
                 st.session_state['tela_atual'] = "relatorios"
                 st.rerun()
         
         st.write("")
         st.write("")
-        # Botão de Sair posicionado de forma limpa na base do menu
+        # Botão de Sair posicionado abaixo dos cards de forma centralizada ou limpa
         if st.button("🚪 Encerrar Sessão / Sair", type="secondary"):
             st.session_state['logado'] = False
             st.session_state['usuario_atual'] = ""
@@ -204,7 +229,6 @@ else:
 
     # --- JANELA: FORMULÁRIO DE LANÇAMENTOS ---
     elif st.session_state['tela_atual'] == "lancamentos":
-        # Cabeçalho de Navegação Superior
         col_nav1, col_nav2 = st.columns([6, 2])
         with col_nav1:
             st.title("📝 Registrar Movimentação")
@@ -231,7 +255,6 @@ else:
                 if descricao == "" or valor == 0:
                     st.warning("Varão, a descrição e o valor não podem ficar vazios!")
                 else:
-                    # Correção da sintaxe realizada com sucesso!
                     dados_envio = {
                         "action": "registrarLancamento",
                         "data_lancamento": data_lancamento.strftime("%d/%m/%Y"),
@@ -252,7 +275,6 @@ else:
 
     # --- JANELA: CONSULTA E EXPORTAÇÃO DE RELATÓRIOS ---
     elif st.session_state['tela_atual'] == "relatorios":
-        # Cabeçalho de Navegação Superior
         col_nav1, col_nav2 = st.columns([6, 2])
         with col_nav1:
             st.title("📊 Relatórios e Exportação")
